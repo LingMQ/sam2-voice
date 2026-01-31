@@ -1,131 +1,181 @@
-"""Main voice bot entry point."""
+"""Main voice bot using Gemini Live API."""
 
 import asyncio
 import os
-import time
+import signal
 from typing import Optional
 
-import aiohttp
 from dotenv import load_dotenv
 
-from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineTask, PipelineParams
-
-from voice.pipeline import create_pipeline
-from voice.handlers import VoiceEventHandlers
+from voice.gemini_live import GeminiLiveClient, GeminiLiveConfig
+from voice.audio import AudioCapture, AudioPlayback, VoiceActivityDetector
 
 
-async def create_daily_room() -> str:
-    """Create a temporary Daily.co room for testing.
+class VoiceBot:
+    """Voice bot using Gemini Live API for real-time conversations."""
 
-    Returns:
-        The room URL to join
-    """
-    api_key = os.getenv("DAILY_API_KEY")
-    if not api_key:
-        raise ValueError("DAILY_API_KEY environment variable is required")
+    def __init__(
+        self,
+        session_id: str = "default",
+        user_id: str = "user",
+        voice: str = "Puck",
+    ):
+        self.session_id = session_id
+        self.user_id = user_id
 
-    async with aiohttp.ClientSession() as session:
-        headers = {"Authorization": f"Bearer {api_key}"}
-        room_config = {
-            "properties": {
-                "exp": int(time.time()) + 3600,  # Expires in 1 hour
-                "enable_chat": False,
-                "enable_screenshare": False,
-                "start_video_off": True,
-                "start_audio_off": False,
-            }
-        }
+        # Gemini Live client
+        config = GeminiLiveConfig(
+            voice=voice,
+            sample_rate=16000,
+        )
+        self.client = GeminiLiveClient(
+            config=config,
+            session_id=session_id,
+            user_id=user_id,
+        )
 
-        async with session.post(
-            "https://api.daily.co/v1/rooms",
-            headers=headers,
-            json=room_config,
-        ) as resp:
-            if resp.status != 200:
-                error = await resp.text()
-                raise RuntimeError(f"Failed to create Daily room: {error}")
+        # Audio components
+        self.audio_capture: Optional[AudioCapture] = None
+        self.audio_playback: Optional[AudioPlayback] = None
+        self.vad: Optional[VoiceActivityDetector] = None
 
-            data = await resp.json()
-            return data["url"]
+        # State
+        self._is_running = False
+        self._is_model_speaking = False
+
+    async def start(self):
+        """Start the voice bot."""
+        print("Starting voice bot...")
+
+        # Connect to Gemini Live API
+        if not await self.client.connect():
+            raise RuntimeError("Failed to connect to Gemini Live API")
+
+        # Initialize audio components
+        self.audio_capture = AudioCapture(sample_rate=16000)
+        self.audio_playback = AudioPlayback(sample_rate=24000)  # Gemini outputs 24kHz
+        self.vad = VoiceActivityDetector()
+
+        # Set up callbacks
+        self.client.set_audio_callback(self._on_audio_response)
+        self.client.set_text_callback(self._on_text_response)
+        self.client.set_turn_complete_callback(self._on_turn_complete)
+
+        # Start audio
+        self.audio_capture.start()
+        self.audio_playback.start()
+
+        self._is_running = True
+        print("\nVoice bot ready! Start speaking...")
+        print("Press Ctrl+C to stop.\n")
+
+    async def stop(self):
+        """Stop the voice bot."""
+        print("\nStopping voice bot...")
+        self._is_running = False
+
+        if self.audio_capture:
+            self.audio_capture.terminate()
+        if self.audio_playback:
+            self.audio_playback.terminate()
+
+        await self.client.disconnect()
+
+        # Print session summary
+        summary = self.client.get_session_summary()
+        print(f"\nSession summary: {summary}")
+
+    def _on_audio_response(self, audio_data: bytes):
+        """Handle audio response from Gemini."""
+        self._is_model_speaking = True
+        if self.audio_playback:
+            self.audio_playback.play(audio_data)
+
+    def _on_text_response(self, text: str):
+        """Handle text response from Gemini."""
+        print(f"Assistant: {text}")
+
+    def _on_turn_complete(self):
+        """Handle turn completion."""
+        self._is_model_speaking = False
+
+    async def run(self):
+        """Main run loop."""
+        await self.start()
+
+        # Start receive task
+        receive_task = asyncio.create_task(self._receive_loop())
+
+        # Main audio capture loop
+        try:
+            while self._is_running:
+                # Read audio from microphone
+                audio_data = await self.audio_capture.read_audio_blocking(timeout=0.05)
+
+                if audio_data:
+                    # Check VAD
+                    is_speaking = self.vad.process(audio_data)
+
+                    # Only send audio when user is speaking and model is not
+                    if is_speaking and not self._is_model_speaking:
+                        await self.client.send_audio(audio_data)
+
+                await asyncio.sleep(0.01)
+
+        except asyncio.CancelledError:
+            pass
+        finally:
+            receive_task.cancel()
+            try:
+                await receive_task
+            except asyncio.CancelledError:
+                pass
+            await self.stop()
+
+    async def _receive_loop(self):
+        """Background task for receiving responses."""
+        try:
+            async for response in self.client.receive_responses():
+                if response["type"] == "tool_call":
+                    print(f"Tool called: {response['name']} -> {response['result']}")
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"Receive error: {e}")
 
 
 async def run_bot(
-    transport_type: str = "daily",
-    room_url: Optional[str] = None,
     session_id: str = "default",
     user_id: str = "user",
+    voice: str = "Puck",
 ):
     """Run the voice bot.
 
     Args:
-        transport_type: "daily" for WebRTC or "local" for local audio
-        room_url: Optional Daily.co room URL (creates one if not provided)
         session_id: Session identifier
         user_id: User identifier
+        voice: Gemini voice to use (Puck, Charon, Kore, Fenrir, Aoede)
     """
-    # Handle Daily room creation
-    if transport_type == "daily":
-        if not room_url:
-            room_url = os.getenv("DAILY_ROOM_URL")
-
-        if not room_url:
-            print("Creating temporary Daily room...")
-            room_url = await create_daily_room()
-
-        print(f"\n{'='*60}")
-        print(f"Voice bot is ready!")
-        print(f"Join the room: {room_url}")
-        print(f"{'='*60}\n")
-
-    # Create the voice pipeline
-    pipeline, transport, adk_processor = await create_pipeline(
-        transport_type=transport_type,
-        room_url=room_url,
+    bot = VoiceBot(
         session_id=session_id,
         user_id=user_id,
+        voice=voice,
     )
 
-    # Create pipeline task with interruption support
-    task = PipelineTask(
-        pipeline,
-        params=PipelineParams(
-            allow_interruptions=True,
-            enable_metrics=True,
-        )
-    )
+    # Handle Ctrl+C gracefully
+    loop = asyncio.get_event_loop()
 
-    # Set up event handlers
-    handlers = VoiceEventHandlers(task, adk_processor)
+    def signal_handler():
+        print("\nReceived interrupt signal...")
+        asyncio.create_task(bot.stop())
 
-    # Optional: Set up session end callback for reflection
-    async def on_session_end(summary, transcript):
-        print(f"\nSession ended. Summary: {summary}")
-        # Here you could trigger reflection generation
-        # from memory.reflection import generate_session_reflection
-        # await generate_session_reflection(...)
-
-    handlers.set_session_end_callback(on_session_end)
-    handlers.register_handlers(transport)
-
-    # Run the pipeline
-    runner = PipelineRunner()
-
-    print("Waiting for participants..." if transport_type == "daily" else "Starting local audio...")
+    loop.add_signal_handler(signal.SIGINT, signal_handler)
 
     try:
-        await runner.run(task)
-    except KeyboardInterrupt:
-        print("\nShutting down...")
+        await bot.run()
     except Exception as e:
         print(f"Error: {e}")
-    finally:
-        print("Bot stopped.")
-
-        # Print session summary
-        if adk_processor:
-            summary = adk_processor.get_session_summary()
-            print(f"\nSession summary: {summary}")
+        await bot.stop()
 
 
 async def main():
@@ -133,22 +183,17 @@ async def main():
     load_dotenv()
 
     # Check for required environment variables
-    required_vars = ["DEEPGRAM_API_KEY", "CARTESIA_API_KEY", "GOOGLE_API_KEY"]
-    missing = [var for var in required_vars if not os.getenv(var)]
-
-    if missing:
-        print(f"Error: Missing required environment variables: {', '.join(missing)}")
-        print("Copy .env.example to .env and fill in your API keys.")
+    if not os.getenv("GOOGLE_API_KEY"):
+        print("Error: GOOGLE_API_KEY environment variable is required")
+        print("Get your API key from: https://aistudio.google.com")
         return
 
-    # Determine transport type
-    if os.getenv("DAILY_API_KEY"):
-        transport_type = "daily"
-    else:
-        print("No DAILY_API_KEY found, using local audio transport")
-        transport_type = "local"
+    print("=" * 60)
+    print("Sam2 Voice - ADHD/Autism Support Voice Agent")
+    print("Using Gemini Live API")
+    print("=" * 60)
 
-    await run_bot(transport_type=transport_type)
+    await run_bot()
 
 
 if __name__ == "__main__":

@@ -1,31 +1,34 @@
 [project]
 name = "sam2-voice"
 version = "0.1.0"
-description = "Self-improving voice agent for Autism/ADHD support"
+description = "Self-improving voice agent for Autism/ADHD support using Gemini Live API"
 requires-python = ">=3.10"
 dependencies = [
-    # Voice Pipeline
-    "pipecat-ai[daily,silero]",       # Pipecat with Daily transport + VAD
-
-    # Speech Services
-    "pipecat-ai[deepgram]",           # Deepgram STT
-    "pipecat-ai[cartesia]",           # Cartesia TTS
+    # Gemini Live API
+    "google-genai>=1.0.0",            # Google GenAI SDK with Live API support
 
     # Agent Framework
-    "google-adk",                      # Google Agent Development Kit
+    "google-adk>=0.1.0",              # Google Agent Development Kit
+
+    # Audio handling
+    "pyaudio>=0.2.14",                # Local audio capture/playback
+    "numpy>=1.24.0",                  # Audio processing
+
+    # WebRTC (optional - for browser-based audio)
+    "aiortc>=1.6.0",                  # WebRTC for Python
+    "aiohttp>=3.9.0",                 # Async HTTP server
 
     # Observability
-    "weave",                           # W&B Weave
+    "weave",                          # W&B Weave
 
     # Utilities
     "python-dotenv",
     "pyyaml",
-    "aiohttp>=3.9.0",
+    "websockets>=12.0",               # WebSocket client
 ]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
-api = ["fastapi", "uvicorn"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
