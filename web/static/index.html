@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Sam2 Voice</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">S2</div>
+          <div class="brand-copy">
+            <span class="brand-title">Sam2 Voice</span>
+            <span class="brand-subtitle">Local conversational agent</span>
+          </div>
+        </div>
+        <div class="status-pill" id="status-pill">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="status">disconnected</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-copy">
+          <h1>Listen, respond, and iterate in real time.</h1>
+          <p class="note">
+            This UI observes the local voice bot (mic/speaker on this machine).
+          </p>
+          <div class="controls">
+            <button id="start">Start session</button>
+            <button id="stop" class="secondary">Stop</button>
+          </div>
+        </div>
+        <div class="hero-card">
+          <div class="metric">
+            <span class="label">Session</span>
+            <span class="value" id="session-state">Idle</span>
+          </div>
+          <div class="metric">
+            <span class="label">Events</span>
+            <span class="value" id="event-count">0</span>
+          </div>
+          <div class="metric">
+            <span class="label">Transcript lines</span>
+            <span class="value" id="transcript-count">0</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel transcript-panel">
+          <div class="panel-header">
+            <h2>Transcript</h2>
+            <button id="clear-transcript" class="ghost">Clear</button>
+          </div>
+          <pre id="transcript" aria-live="polite"></pre>
+        </div>
+        <div class="panel events-panel">
+          <div class="panel-header">
+            <h2>Events</h2>
+            <button id="clear-events" class="ghost">Clear</button>
+          </div>
+          <pre id="events"></pre>
+        </div>
+      </section>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

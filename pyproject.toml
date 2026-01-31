@@ -29,6 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
+web = ["fastapi", "uvicorn[standard]"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

@@ -18,7 +18,12 @@ from state.context import ConversationContext
 class GeminiLiveConfig:
     """Configuration for Gemini Live API session."""
 
-    model: str = "gemini-2.0-flash-exp"
+    model: str = field(
+        default_factory=lambda: os.getenv(
+            "GEMINI_LIVE_MODEL",
+            "gemini-2.5-flash-native-audio-latest",
+        )
+    )
     voice: str = "Puck"  # Puck, Charon, Kore, Fenrir, Aoede
     system_instruction: Optional[str] = None
 
@@ -62,6 +67,7 @@ class GeminiLiveClient:
 
         # Session handle
         self._session = None
+        self._session_cm = None
         self._is_connected = False
 
         # Callbacks
@@ -231,10 +237,12 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
             )
 
             # Connect to Live API
-            self._session = self.client.aio.live.connect(
+            # `connect` returns an async context manager; enter it for a live session
+            self._session_cm = self.client.aio.live.connect(
                 model=self.config.model,
                 config=config,
             )
+            self._session = await self._session_cm.__aenter__()
 
             self._is_connected = True
             print(f"Connected to Gemini Live API ({self.config.model})")
@@ -246,8 +254,9 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
 
     async def disconnect(self):
         """Disconnect from Gemini Live API."""
-        if self._session:
-            await self._session.close()
+        if self._session_cm:
+            await self._session_cm.__aexit__(None, None, None)
+            self._session_cm = None
             self._session = None
         self._is_connected = False
         print("Disconnected from Gemini Live API")
@@ -266,18 +275,11 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         if not self._session:
             return
 
-        # Encode audio as base64
-        audio_b64 = base64.b64encode(audio_data).decode("utf-8")
-
         # Send as realtime input
-        await self._session.send(
-            types.LiveClientRealtimeInput(
-                media_chunks=[
-                    types.Blob(
-                        mime_type=f"audio/pcm;rate={self.config.sample_rate}",
-                        data=audio_b64,
-                    )
-                ]
+        await self._session.send_realtime_input(
+            media=types.Blob(
+                mime_type=f"audio/pcm;rate={self.config.sample_rate}",
+                data=audio_data,
             )
         )
 
@@ -292,16 +294,14 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
 
         self.context.add_user_message(text)
 
-        await self._session.send(
-            types.LiveClientContent(
-                turns=[
-                    types.Content(
-                        role="user",
-                        parts=[types.Part(text=text)]
-                    )
-                ],
-                turn_complete=True,
-            )
+        await self._session.send_client_content(
+            turns=[
+                types.Content(
+                    role="user",
+                    parts=[types.Part(text=text)],
+                )
+            ],
+            turn_complete=True,
         )
 
     async def receive_responses(self) -> AsyncIterator[dict]:
@@ -313,52 +313,57 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         if not self._session:
             return
 
-        async for response in self._session.receive():
-            # Handle different response types
-            if response.server_content:
-                content = response.server_content
+        while self._session:
+            async for response in self._session.receive():
+                # Handle different response types
+                if response.server_content:
+                    content = response.server_content
 
-                # Audio response
-                if content.model_turn:
-                    for part in content.model_turn.parts:
-                        if part.inline_data:
-                            # Audio data
-                            audio_bytes = base64.b64decode(part.inline_data.data)
-                            if self._on_audio:
-                                self._on_audio(audio_bytes)
-                            yield {"type": "audio", "data": audio_bytes}
+                    # Audio response
+                    if content.model_turn:
+                        for part in content.model_turn.parts:
+                            if part.inline_data:
+                                # Audio data
+                                audio_payload = part.inline_data.data
+                                if isinstance(audio_payload, str):
+                                    audio_bytes = base64.b64decode(audio_payload)
+                                else:
+                                    audio_bytes = audio_payload
+                                if self._on_audio:
+                                    self._on_audio(audio_bytes)
+                                yield {"type": "audio", "data": audio_bytes}
 
-                        elif part.text:
-                            # Text response
-                            if self._on_text:
-                                self._on_text(part.text)
-                            self.context.add_assistant_message(part.text)
-                            yield {"type": "text", "data": part.text}
+                            elif part.text:
+                                # Text response
+                                if self._on_text:
+                                    self._on_text(part.text)
+                                self.context.add_assistant_message(part.text)
+                                yield {"type": "text", "data": part.text}
 
-                # Turn complete
-                if content.turn_complete:
-                    if self._on_turn_complete:
-                        self._on_turn_complete()
-                    yield {"type": "turn_complete", "data": None}
+                    # Turn complete
+                    if content.turn_complete:
+                        if self._on_turn_complete:
+                            self._on_turn_complete()
+                        yield {"type": "turn_complete", "data": None}
 
-            # Tool call
-            elif response.tool_call:
-                tool_call = response.tool_call
-                for fc in tool_call.function_calls:
-                    result = await self._handle_tool_call(fc.name, fc.args)
-                    yield {"type": "tool_call", "name": fc.name, "result": result}
+                # Tool call
+                elif response.tool_call:
+                    tool_call = response.tool_call
+                    for fc in tool_call.function_calls:
+                        result = await self._handle_tool_call(fc.name, fc.args)
+                        yield {"type": "tool_call", "name": fc.name, "result": result}
 
-                    # Send tool response back
-                    await self._session.send(
-                        types.LiveClientToolResponse(
-                            function_responses=[
-                                types.FunctionResponse(
-                                    name=fc.name,
-                                    response={"result": result}
-                                )
-                            ]
+                        # Send tool response back
+                        response_kwargs = {
+                            "name": fc.name,
+                            "response": {"result": result},
+                        }
+                        if getattr(fc, "id", None):
+                            response_kwargs["id"] = fc.id
+
+                        await self._session.send_tool_response(
+                            function_responses=[types.FunctionResponse(**response_kwargs)]
                         )
-                    )
 
     async def _handle_tool_call(self, name: str, args: dict) -> str:
         """Handle a tool call from the model.
