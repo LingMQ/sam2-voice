@@ -1,0 +1,32 @@
+[project]
+name = "sam2-voice"
+version = "0.1.0"
+description = "Self-improving voice agent for Autism/ADHD support"
+requires-python = ">=3.10"
+dependencies = [
+    # Voice Pipeline
+    "pipecat-ai[daily,silero]",       # Pipecat with Daily transport + VAD
+
+    # Speech Services
+    "pipecat-ai[deepgram]",           # Deepgram STT
+    "pipecat-ai[cartesia]",           # Cartesia TTS
+
+    # Agent Framework
+    "google-adk",                      # Google Agent Development Kit
+
+    # Observability
+    "weave",                           # W&B Weave
+
+    # Utilities
+    "python-dotenv",
+    "pyyaml",
+    "aiohttp>=3.9.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+api = ["fastapi", "uvicorn"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
