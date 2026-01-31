@@ -73,7 +73,61 @@ The system will use a multi-agent architecture with real-time voice capabilities
 - Getting distracted quickly
 - Losing motivation mid-task
 - Difficulty maintaining sustained attention
-- Internal feedback loops not providing enough motivation/reward
+- Internal feedback loops not providing enough motivagtion/reward
+
+#### Use Case B: Transition Support *(Autism-friendly)*
+
+- **Scenario:** Task switching is hard; unexpected schedule changes cause stress.
+- **Agent does:** Gives a predictable transition script: "Now → Next → After" with buffers and clear steps.
+- **Demo:** *"Meeting got moved"* → agent generates a 3-step transition plan + 2-minute regulation break + new next action.
+
+#### Use Case C: Sensory Overload Prevention & Recovery *(Autism-friendly)*
+
+- **Scenario:** User feels overloaded (noise/light/social demands) and can't continue.
+- **Agent does:** Quick sensory check-in + suggests accommodations + returns to task in a low-demand way.
+- **Demo:** *"I'm overwhelmed"* → agent: *"Noise, light, body tension?"* → *"Headphones + water + sit"* → *"Resume with 1-minute step."*
+
+#### Use Case D: "Stuck" / Shutdown / Freeze Reset *(Autism + ADHD)*
+
+- **Scenario:** User can't start; brain feels jammed.
+- **Agent does:** Offers a 2-minute reset (breathing optional), then chooses the smallest possible next step.
+- **Demo:** *"I can't start"* → *"Pick 1 of these 3 tiny steps"* → user picks → immediate start.
+
+#### Use Case E: Morning Routine Builder *(Autism/ADHD)*
+
+- **Scenario:** Routines fall apart; decision fatigue.
+- **Agent does:** Creates a fixed routine with optional branches ("If low energy → do minimum version"), then runs it with gentle prompts.
+- **Demo:** *"I want a morning routine"* → agent builds 3-step "minimum viable routine" → daily run-through.
+
+#### Use Case F: Social Communication Clarifier *(Autism-friendly)*
+
+- **Scenario:** Ambiguous messages cause anxiety; interpreting tone is hard.
+- **Agent does:** Rewrites unclear messages into concrete options and drafts clarifying questions.
+- **Demo:** User reads a vague text → agent: *"Possible meanings A/B/C"* + *"Reply options"* + *"Clarify politely."*
+
+#### Use Case G: Anxiety Around Performance / Perfectionism *(ADHD overlap)*
+
+- **Scenario:** User spirals into "must do perfectly" → avoids starting.
+- **Agent does:** Reframes as "prototype mode," sets a 10-minute imperfect sprint, rewards completion.
+- **Demo:** *"I'm avoiding this"* → *"10-minute messy draft sprint"* → *"Done is a win."*
+
+#### Use Case H: Study / Deep Work Companion *(ADHD)*
+
+- **Scenario:** Needs structure to study; frequent distractibility.
+- **Agent does:** 25/5 style timer, but with micro-checks (*"Still on task?"*) and rewards (*"token earned"*).
+- **Demo:** *"I need to study"* → agent starts focus session + mid-session check + reward.
+
+#### Use Case I: Household Chore "Game Mode" *(Autism/ADHD)*
+
+- **Scenario:** Chores feel infinite and unrewarding.
+- **Agent does:** Turns chores into small quests + visible progress + reward at milestones.
+- **Demo:** *"Do dishes"* → *"Quest: 10 items"* → micro praise → *"Boss fight: 2 pans."*
+
+#### Use Case J: Caregiver / Coach Assist *(optional)*
+
+- **Scenario:** Parent/partner wants to support without nagging.
+- **Agent does:** Consent-first check-in scripts + low-pressure reinforcement suggestions.
+- **Demo:** *"Help me support my partner"* → agent drafts a consent-based support message + plan.
 
 ### How the System Helps
 
