@@ -11,7 +11,7 @@ dependencies = [
     "google-adk>=0.1.0",              # Google Agent Development Kit
 
     # Audio handling
-    "pyaudio>=0.2.14",                # Local audio capture/playback
+    "sounddevice>=0.4.6",             # Local audio capture/playback (easier than pyaudio)
     "numpy>=1.24.0",                  # Audio processing
 
     # WebRTC (optional - for browser-based audio)
@@ -33,3 +33,10 @@ dev = ["pytest", "pytest-asyncio"]
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["voice*", "agents*", "state*", "utils*"]
+exclude = ["config*", "data*", "tests*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.yaml"]

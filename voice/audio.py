@@ -1,4 +1,4 @@
-"""Audio capture and playback utilities."""
+"""Audio capture and playback utilities using sounddevice."""
 
 import asyncio
 import queue
@@ -6,14 +6,14 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-try:
-    import pyaudio
-    PYAUDIO_AVAILABLE = True
-except ImportError:
-    PYAUDIO_AVAILABLE = False
-    print("Warning: pyaudio not available. Install with: pip install pyaudio")
-
 import numpy as np
+
+try:
+    import sounddevice as sd
+    SOUNDDEVICE_AVAILABLE = True
+except ImportError:
+    SOUNDDEVICE_AVAILABLE = False
+    print("Warning: sounddevice not available. Install with: pip install sounddevice")
 
 
 @dataclass
@@ -22,13 +22,13 @@ class AudioConfig:
     sample_rate: int = 16000
     channels: int = 1
     chunk_size: int = 1024
-    format: int = 8  # pyaudio.paInt16
+    dtype: str = "int16"
 
 
 class AudioCapture:
-    """Captures audio from the microphone.
+    """Captures audio from the microphone using sounddevice.
 
-    Uses a separate thread to avoid blocking the async event loop.
+    Uses a callback-based approach for efficient audio capture.
     """
 
     def __init__(
@@ -37,17 +37,15 @@ class AudioCapture:
         channels: int = 1,
         chunk_size: int = 1024,
     ):
-        if not PYAUDIO_AVAILABLE:
-            raise RuntimeError("pyaudio is required for audio capture")
+        if not SOUNDDEVICE_AVAILABLE:
+            raise RuntimeError("sounddevice is required for audio capture")
 
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk_size = chunk_size
 
-        self._audio = pyaudio.PyAudio()
-        self._stream = None
+        self._stream: Optional[sd.InputStream] = None
         self._is_running = False
-        self._thread = None
 
         # Queue for audio data
         self._audio_queue: queue.Queue = queue.Queue()
@@ -59,52 +57,44 @@ class AudioCapture:
         """Set callback for audio data."""
         self._on_audio = callback
 
+    def _audio_callback(self, indata, frames, time, status):
+        """Callback for sounddevice stream."""
+        if status:
+            print(f"Audio capture status: {status}")
+
+        # Convert to bytes
+        audio_bytes = indata.tobytes()
+        self._audio_queue.put(audio_bytes)
+
+        if self._on_audio:
+            self._on_audio(audio_bytes)
+
     def start(self):
         """Start capturing audio."""
         if self._is_running:
             return
 
-        self._stream = self._audio.open(
-            format=pyaudio.paInt16,
+        self._stream = sd.InputStream(
+            samplerate=self.sample_rate,
             channels=self.channels,
-            rate=self.sample_rate,
-            input=True,
-            frames_per_buffer=self.chunk_size,
+            dtype="int16",
+            blocksize=self.chunk_size,
+            callback=self._audio_callback,
         )
-
+        self._stream.start()
         self._is_running = True
-        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self._thread.start()
         print("Audio capture started")
 
     def stop(self):
         """Stop capturing audio."""
         self._is_running = False
 
-        if self._thread:
-            self._thread.join(timeout=1.0)
-            self._thread = None
-
         if self._stream:
-            self._stream.stop_stream()
+            self._stream.stop()
             self._stream.close()
             self._stream = None
 
         print("Audio capture stopped")
-
-    def _capture_loop(self):
-        """Background thread for capturing audio."""
-        while self._is_running:
-            try:
-                data = self._stream.read(self.chunk_size, exception_on_overflow=False)
-                self._audio_queue.put(data)
-
-                if self._on_audio:
-                    self._on_audio(data)
-
-            except Exception as e:
-                print(f"Audio capture error: {e}")
-                break
 
     async def read_audio(self) -> Optional[bytes]:
         """Read audio data from the queue (async).
@@ -136,12 +126,10 @@ class AudioCapture:
     def terminate(self):
         """Clean up audio resources."""
         self.stop()
-        if self._audio:
-            self._audio.terminate()
 
 
 class AudioPlayback:
-    """Plays audio through the speakers.
+    """Plays audio through the speakers using sounddevice.
 
     Uses a queue and separate thread for smooth playback.
     """
@@ -152,15 +140,14 @@ class AudioPlayback:
         channels: int = 1,
         chunk_size: int = 1024,
     ):
-        if not PYAUDIO_AVAILABLE:
-            raise RuntimeError("pyaudio is required for audio playback")
+        if not SOUNDDEVICE_AVAILABLE:
+            raise RuntimeError("sounddevice is required for audio playback")
 
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk_size = chunk_size
 
-        self._audio = pyaudio.PyAudio()
-        self._stream = None
+        self._stream: Optional[sd.OutputStream] = None
         self._is_running = False
         self._thread = None
 
@@ -172,13 +159,13 @@ class AudioPlayback:
         if self._is_running:
             return
 
-        self._stream = self._audio.open(
-            format=pyaudio.paInt16,
+        self._stream = sd.OutputStream(
+            samplerate=self.sample_rate,
             channels=self.channels,
-            rate=self.sample_rate,
-            output=True,
-            frames_per_buffer=self.chunk_size,
+            dtype="int16",
+            blocksize=self.chunk_size,
         )
+        self._stream.start()
 
         self._is_running = True
         self._thread = threading.Thread(target=self._playback_loop, daemon=True)
@@ -194,7 +181,7 @@ class AudioPlayback:
             self._thread = None
 
         if self._stream:
-            self._stream.stop_stream()
+            self._stream.stop()
             self._stream.close()
             self._stream = None
 
@@ -205,7 +192,11 @@ class AudioPlayback:
         while self._is_running:
             try:
                 data = self._audio_queue.get(timeout=0.1)
-                self._stream.write(data)
+                # Convert bytes to numpy array
+                audio_np = np.frombuffer(data, dtype=np.int16)
+                # Reshape for sounddevice (samples, channels)
+                audio_np = audio_np.reshape(-1, self.channels)
+                self._stream.write(audio_np)
             except queue.Empty:
                 continue
             except Exception as e:
@@ -231,8 +222,6 @@ class AudioPlayback:
     def terminate(self):
         """Clean up audio resources."""
         self.stop()
-        if self._audio:
-            self._audio.terminate()
 
 
 class VoiceActivityDetector:
