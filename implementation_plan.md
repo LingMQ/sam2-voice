@@ -420,6 +420,94 @@ initial_assessment = ParallelAgent(
 
 ---
 
+## Phase 3.5: User Onboarding & Profile
+
+### 3.5.1 Onboarding Flow
+
+After the initial greeting, the agent asks a single, simple question about diagnosis to personalize the experience.
+
+```
+Greeting → Diagnosis Question → Store Profile → Personalized Conversation
+```
+
+**Flow:**
+1. Bot greets: "Hi! I'm here to help you stay on track."
+2. Bot asks: "Quick question - do you have ADHD, autism, or both? You can also say 'neither' or 'skip'."
+3. User responds
+4. Bot stores profile in Redis and adapts behavior accordingly
+
+### 3.5.2 User Profile Schema
+
+Each user profile contains the following information:
+
+**Core Fields:**
+- `user_id` - Unique identifier for the user
+- `diagnosis` - One of: NONE, ADHD, AUTISM, or BOTH
+- `diagnosis_source` - One of: OFFICIAL, SELF, or UNSPECIFIED
+
+**Adaptation Intensity:**
+The intensity value (0.0 to 1.0) determines how strongly adaptations are applied:
+- Official diagnosis → 1.0 (full intensity)
+- Self-diagnosis → 0.8 (slightly reduced)
+- Unspecified → 0.9 (near-full)
+
+**Learned Preferences (updated over time):**
+- `preferred_checkin_interval` - Optimal minutes between check-ins (default: 3.0)
+- `sensory_sensitivities` - List of known sensitivities (noise, light, etc.)
+
+**State:**
+- `onboarding_complete` - Whether the diagnosis question has been asked
+
+### 3.5.3 Redis Storage
+
+User profiles are stored in Redis using a simple key-value structure:
+
+- **Key format:** `sam2voice:profile:{user_id}`
+- **Value:** JSON-serialized user profile containing diagnosis, source, preferences, and onboarding state
+- **Operations:**
+  - `get(user_id)` - Retrieve profile, returns None if not found
+  - `save(profile)` - Store or update profile
+  - `get_or_create(user_id)` - Get existing profile or create new default one
+  - `update_diagnosis(user_id, diagnosis, source)` - Update diagnosis and mark onboarding complete
+
+### 3.5.4 Diagnosis-Based Adaptations
+
+| Aspect | ADHD (intensity: 1.0) | Autism (intensity: 1.0) | Both | Self-Dx (×0.8) |
+|--------|----------------------|------------------------|------|----------------|
+| Check-in frequency | 2-3 min | 5+ min | 3-4 min | Slightly longer |
+| Task steps | Smaller | Clear/predictable | Both | Standard size |
+| Reinforcement | Frequent, varied | Consistent | Predictable+frequent | Less frequent |
+| Sensory checks | Low priority | High priority | High | Medium |
+| Transition warnings | Helpful | Critical | Critical | Helpful |
+
+### 3.5.5 Prompt Personalization
+
+The system dynamically builds personalized prompts based on the user's profile:
+
+**For ADHD users:**
+- Instructs the agent to check in every 2-3 minutes (adjusted by intensity)
+- Emphasizes keeping responses extra short and punchy
+- Adds awareness for hyperfocus and distraction patterns
+- Prepares for topic jumps with gentle redirection
+
+**For Autism users:**
+- Instructs the agent to be predictable and explicit
+- Requires transition warnings before changing topics
+- Prioritizes sensory state checks when user seems stressed
+- Avoids idioms and ambiguous language
+
+**For users with both:**
+- Combines both sets of adaptations
+- Adds guidance to balance novelty with predictability
+- Extra patience with executive function challenges
+
+**Intensity scaling:**
+- Official diagnosis (100%): Full adaptation strength
+- Self-diagnosis (80%): Slightly reduced - e.g., check-ins every 2-4 min instead of 2-3 min
+- Unspecified (90%): Near-full adaptation
+
+---
+
 ## Phase 4: W&B Weave Observability
 
 ### 4.1 Setup (observability/weave_setup.py)
