@@ -3,6 +3,7 @@
 import asyncio
 import os
 import signal
+import time
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -19,9 +20,19 @@ class VoiceBot:
         session_id: str = "default",
         user_id: str = "user",
         voice: str = "Puck",
+        max_turns: Optional[int] = None,
+        on_text: Optional[callable] = None,
+        on_status: Optional[callable] = None,
+        on_error: Optional[callable] = None,
+        on_turn_complete: Optional[callable] = None,
     ):
         self.session_id = session_id
         self.user_id = user_id
+        self.max_turns = max_turns
+        self._on_text_cb = on_text
+        self._on_status_cb = on_status
+        self._on_error_cb = on_error
+        self._on_turn_complete_cb = on_turn_complete
 
         # Gemini Live client
         config = GeminiLiveConfig(
@@ -42,13 +53,19 @@ class VoiceBot:
         # State
         self._is_running = False
         self._is_model_speaking = False
+        self._turns_completed = 0
+        self._last_response_at = 0.0
 
     async def start(self):
         """Start the voice bot."""
         print("Starting voice bot...")
+        if self._on_status_cb:
+            self._on_status_cb("starting")
 
         # Connect to Gemini Live API
         if not await self.client.connect():
+            if self._on_error_cb:
+                self._on_error_cb("Failed to connect to Gemini Live API")
             raise RuntimeError("Failed to connect to Gemini Live API")
 
         # Initialize audio components
@@ -68,10 +85,14 @@ class VoiceBot:
         self._is_running = True
         print("\nVoice bot ready! Start speaking...")
         print("Press Ctrl+C to stop.\n")
+        if self._on_status_cb:
+            self._on_status_cb("ready")
 
     async def stop(self):
         """Stop the voice bot."""
         print("\nStopping voice bot...")
+        if self._on_status_cb:
+            self._on_status_cb("stopping")
         self._is_running = False
 
         if self.audio_capture:
@@ -84,20 +105,33 @@ class VoiceBot:
         # Print session summary
         summary = self.client.get_session_summary()
         print(f"\nSession summary: {summary}")
+        if self._on_status_cb:
+            self._on_status_cb("stopped")
 
     def _on_audio_response(self, audio_data: bytes):
         """Handle audio response from Gemini."""
         self._is_model_speaking = True
+        self._last_response_at = time.monotonic()
         if self.audio_playback:
             self.audio_playback.play(audio_data)
 
     def _on_text_response(self, text: str):
         """Handle text response from Gemini."""
         print(f"Assistant: {text}")
+        self._last_response_at = time.monotonic()
+        if self._on_text_cb:
+            self._on_text_cb(text)
 
     def _on_turn_complete(self):
         """Handle turn completion."""
         self._is_model_speaking = False
+        self._last_response_at = time.monotonic()
+        if self._on_turn_complete_cb:
+            self._on_turn_complete_cb()
+        if self.max_turns is not None:
+            self._turns_completed += 1
+            if self._turns_completed >= self.max_turns:
+                self._is_running = False
 
     async def run(self):
         """Main run loop."""
@@ -109,6 +143,11 @@ class VoiceBot:
         # Main audio capture loop
         try:
             while self._is_running:
+                if self._is_model_speaking and self._last_response_at:
+                    if time.monotonic() - self._last_response_at > 4.0:
+                        # If the model never sends turn_complete, unlock input.
+                        self._is_model_speaking = False
+
                 # Read audio from microphone
                 audio_data = await self.audio_capture.read_audio_blocking(timeout=0.05)
 
@@ -142,12 +181,15 @@ class VoiceBot:
             pass
         except Exception as e:
             print(f"Receive error: {e}")
+            if self._on_error_cb:
+                self._on_error_cb(str(e))
 
 
 async def run_bot(
     session_id: str = "default",
     user_id: str = "user",
     voice: str = "Puck",
+    max_turns: Optional[int] = None,
 ):
     """Run the voice bot.
 
@@ -160,6 +202,7 @@ async def run_bot(
         session_id=session_id,
         user_id=user_id,
         voice=voice,
+        max_turns=max_turns,
     )
 
     # Handle Ctrl+C gracefully
@@ -175,6 +218,8 @@ async def run_bot(
         await bot.run()
     except Exception as e:
         print(f"Error: {e}")
+        if bot._on_error_cb:
+            bot._on_error_cb(str(e))
         await bot.stop()
 
 

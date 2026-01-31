@@ -41,6 +41,12 @@ def parse_args():
         default="user",
         help="User identifier"
     )
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=None,
+        help="Stop after N model turns (use 1 for single-turn mode)",
+    )
     return parser.parse_args()
 
 
@@ -53,6 +59,7 @@ async def main():
         session_id=args.session_id,
         user_id=args.user_id,
         voice=args.voice,
+        max_turns=args.max_turns,
     )
 
 

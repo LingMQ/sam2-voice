@@ -29,7 +29,11 @@ Edit `.env` and add your API key:
 | Key | Required | Get from |
 |-----|----------|----------|
 | `GOOGLE_API_KEY` | Yes | https://aistudio.google.com |
+| `GEMINI_LIVE_MODEL` | Optional | Use if your account supports a specific Live model |
 | `WANDB_API_KEY` | For observability | https://wandb.ai |
+
+**Live model default:** `gemini-2.5-flash-native-audio-latest`.  
+Override with `GEMINI_LIVE_MODEL` if your account has access to a different Live model.
 
 ### 3. Run the Bot
 
@@ -45,6 +49,36 @@ python main.py --voice Kore
 ```
 
 Available voices: `Puck`, `Charon`, `Kore`, `Fenrir`, `Aoede`
+
+### Optional: Web UI (Next.js)
+
+The UI shows live status and transcript while the voice bot runs locally on
+this machine (mic + speakers stay local).
+
+Run the backend (WebSocket API):
+
+```bash
+pip install -e ".[web]"
+uvicorn web.app:app --reload
+```
+
+Run the Next.js frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://127.0.0.1:3000 and click **Start session**.
+
+If you want FastAPI to serve a static export of the UI at
+http://127.0.0.1:8000, build the frontend:
+
+```bash
+cd frontend
+npm run build
+```
 
 ### 4. Start Talking
 
