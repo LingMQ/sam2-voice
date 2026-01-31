@@ -97,18 +97,24 @@
 
 ## Competitive Matrix
 
-| Feature | sam2-voice | Tiimo | Goblin.tools | Focusmate | Inflow |
-|---------|------------|-------|--------------|-----------|--------|
-| Voice Interface | ✅ | ❌ | ❌ | ⚠️ (video) | ❌ |
-| Real-time AI | ✅ | ❌ | ⚠️ (one-shot) | ❌ | ❌ |
-| Proactive Check-ins | ✅ | ⚠️ (reminders) | ❌ | ❌ | ❌ |
-| Task Breakdown | ✅ | ⚠️ (manual) | ✅ | ❌ | ⚠️ |
-| Learns User Patterns | ✅ | ❌ | ❌ | ❌ | ⚠️ |
-| Emotional Support | ✅ | ❌ | ❌ | ⚠️ (human) | ✅ |
-| ABA Techniques | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Always Available | ✅ | ✅ | ✅ | ❌ | ✅ |
-| Free Tier | ✅ | ✅ | ✅ | ✅ | ❌ |
-| Self-Improving | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Feature | sam2-voice | Tiimo | Goblin.tools | Focusmate | Inflow | ChatGPT Voice | Replika |
+|---------|------------|-------|--------------|-----------|--------|---------------|---------|
+| **Voice Interface** | ✅ | ❌ | ❌ | ⚠️ (video) | ❌ | ✅ | ✅ |
+| **Real-time Conversational AI** | ✅ | ❌ | ⚠️ (one-shot) | ❌ | ❌ | ✅ | ✅ |
+| **ADHD/Autism Specialized** | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Micro-Feedback Loops** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Proactive Check-ins** | ✅ | ⚠️ (reminders) | ❌ | ❌ | ❌ | ❌ | ⚠️ (social) |
+| **AI Task Breakdown** | ✅ | ⚠️ (manual) | ✅ | ❌ | ⚠️ | ✅ | ❌ |
+| **Session Memory** | ✅ | ❌ | ❌ | ❌ | ⚠️ | ⚠️ (limited) | ✅ |
+| **Learns User Patterns** | ✅ | ❌ | ❌ | ❌ | ⚠️ | ❌ | ⚠️ (personality) |
+| **Emotional Regulation Support** | ✅ | ❌ | ❌ | ⚠️ (human) | ✅ | ⚠️ (generic) | ✅ |
+| **ABA Therapy Techniques** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Body Doubling** | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| **Task/Productivity Focus** | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ (general) | ❌ |
+| **Always Available (On-Demand)** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| **Free Tier** | ✅ | ✅ | ✅ | ✅ | ❌ | ⚠️ (limited) | ⚠️ (limited) |
+| **Self-Improving Over Time** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Open Source / Self-Hostable** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
