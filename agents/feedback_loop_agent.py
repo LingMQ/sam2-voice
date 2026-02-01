@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from google.adk import Agent
-from google.adk.tools import tool
+from google.adk.tools import FunctionTool
 
 
 def _load_prompt(name: str) -> str:
@@ -20,7 +20,6 @@ def _load_prompt(name: str) -> str:
 _scheduled_checkins: dict[str, datetime] = {}
 
 
-@tool
 def schedule_checkin(minutes: int, session_id: str = "default") -> str:
     """Schedule a check-in with the user after specified minutes.
 
@@ -37,7 +36,6 @@ def schedule_checkin(minutes: int, session_id: str = "default") -> str:
     return f"Check-in scheduled for {minutes} minutes from now"
 
 
-@tool
 def get_time_since_last_checkin(session_id: str = "default") -> str:
     """Get time since the last check-in.
 
@@ -54,7 +52,6 @@ def get_time_since_last_checkin(session_id: str = "default") -> str:
     return "No previous check-in recorded"
 
 
-@tool
 def log_micro_win(description: str, category: str = "general") -> str:
     """Log a micro-win for the user to track progress.
 
@@ -87,5 +84,9 @@ Your job:
 
 Keep responses under 2 sentences. Be warm and genuine.
 """,
-    tools=[schedule_checkin, get_time_since_last_checkin, log_micro_win],
+    tools=[
+        FunctionTool(schedule_checkin),
+        FunctionTool(get_time_since_last_checkin),
+        FunctionTool(log_micro_win),
+    ],
 )

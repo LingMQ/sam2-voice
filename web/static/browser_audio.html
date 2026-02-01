@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sam2 Voice - Browser Audio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #eee;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .subtitle { color: #888; margin-bottom: 2rem; }
+
+    .status-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .dot.connected { background: #4ade80; }
+    .dot.recording { background: #f87171; animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    button {
+      flex: 1;
+      padding: 1rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-start {
+      background: #4ade80;
+      color: #000;
+    }
+    .btn-start:hover:not(:disabled) { background: #22c55e; }
+    .btn-stop {
+      background: #f87171;
+      color: #000;
+    }
+    .btn-stop:hover:not(:disabled) { background: #ef4444; }
+
+    .transcript {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 1.5rem;
+      min-height: 200px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .transcript h2 {
+      font-size: 1rem;
+      color: #888;
+      margin-bottom: 1rem;
+    }
+    .message {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+    }
+    .message.assistant {
+      background: rgba(74, 222, 128, 0.1);
+      border-left: 3px solid #4ade80;
+    }
+    .message.user {
+      background: rgba(96, 165, 250, 0.1);
+      border-left: 3px solid #60a5fa;
+    }
+    .empty-state {
+      color: #666;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .audio-level {
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+    .audio-level-bar {
+      height: 100%;
+      background: #4ade80;
+      width: 0%;
+      transition: width 0.1s;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Sam2 Voice</h1>
+    <p class="subtitle">ADHD/Autism Support Voice Assistant</p>
+
+    <div class="status-card">
+      <div class="status-indicator">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Disconnected</span>
+      </div>
+
+      <div class="controls">
+        <button class="btn-start" id="startBtn" disabled>Start Listening</button>
+        <button class="btn-stop" id="stopBtn" disabled>Stop</button>
+      </div>
+
+      <div class="audio-level">
+        <div class="audio-level-bar" id="audioLevel"></div>
+      </div>
+    </div>
+
+    <div class="transcript">
+      <h2>Conversation</h2>
+      <div id="messages">
+        <div class="empty-state">Click "Start Listening" and speak...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const messagesDiv = document.getElementById('messages');
+    const audioLevel = document.getElementById('audioLevel');
+
+    let ws = null;
+    let mediaRecorder = null;
+    let audioContext = null;
+    let isRecording = false;
+
+    // Connect WebSocket
+    function connect() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}/ws/audio`);
+
+      ws.onopen = () => {
+        statusDot.className = 'dot connected';
+        statusText.textContent = 'Connected - Ready';
+        startBtn.disabled = false;
+      };
+
+      ws.onclose = () => {
+        statusDot.className = 'dot';
+        statusText.textContent = 'Disconnected';
+        startBtn.disabled = true;
+        stopBtn.disabled = true;
+        stopRecording();
+        setTimeout(connect, 2000);
+      };
+
+      ws.onmessage = async (event) => {
+        if (event.data instanceof Blob) {
+          // Audio response - play it
+          const arrayBuffer = await event.data.arrayBuffer();
+          playAudio(arrayBuffer);
+        } else {
+          // JSON message
+          const data = JSON.parse(event.data);
+          handleMessage(data);
+        }
+      };
+    }
+
+    function handleMessage(data) {
+      if (data.type === 'text') {
+        addMessage('assistant', data.payload);
+      } else if (data.type === 'status') {
+        statusText.textContent = 'Connected - ' + data.payload;
+      } else if (data.type === 'error') {
+        console.error('Error:', data.payload);
+        addMessage('assistant', 'Error: ' + data.payload);
+      }
+    }
+
+    function addMessage(role, text) {
+      const emptyState = messagesDiv.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
+
+      const msg = document.createElement('div');
+      msg.className = 'message ' + role;
+      msg.textContent = text;
+      messagesDiv.appendChild(msg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        });
+
+        // Set up audio context for level monitoring
+        audioContext = new AudioContext({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        // Monitor audio level
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        function updateLevel() {
+          if (!isRecording) return;
+          analyser.getByteFrequencyData(dataArray);
+          const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          audioLevel.style.width = Math.min(100, avg * 2) + '%';
+          requestAnimationFrame(updateLevel);
+        }
+
+        // Use ScriptProcessorNode to get raw PCM data
+        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+
+        processor.onaudioprocess = (e) => {
+          if (!isRecording || ws.readyState !== WebSocket.OPEN) return;
+
+          const inputData = e.inputBuffer.getChannelData(0);
+          // Convert float32 to int16
+          const int16Data = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+          }
+          ws.send(int16Data.buffer);
+        };
+
+        isRecording = true;
+        statusDot.className = 'dot recording';
+        statusText.textContent = 'Recording...';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        updateLevel();
+
+        // Send start signal
+        ws.send(JSON.stringify({ action: 'start' }));
+
+      } catch (err) {
+        console.error('Microphone error:', err);
+        alert('Could not access microphone: ' + err.message);
+      }
+    }
+
+    function stopRecording() {
+      isRecording = false;
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      resetAudio(); // Reset playback state
+      statusDot.className = 'dot connected';
+      statusText.textContent = 'Connected - Stopped';
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      audioLevel.style.width = '0%';
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'stop' }));
+      }
+    }
+
+    // Audio playback - improved buffering
+    let playbackContext = null;
+    let scheduledTime = 0;
+    let isFirstChunk = true;
+
+    async function playAudio(arrayBuffer) {
+      if (!playbackContext) {
+        playbackContext = new AudioContext({ sampleRate: 24000 });
+        scheduledTime = playbackContext.currentTime;
+        isFirstChunk = true;
+      }
+
+      // Convert raw PCM int16 to AudioBuffer
+      const int16Array = new Int16Array(arrayBuffer);
+      const float32Array = new Float32Array(int16Array.length);
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768;
+      }
+
+      const audioBuffer = playbackContext.createBuffer(1, float32Array.length, 24000);
+      audioBuffer.getChannelData(0).set(float32Array);
+
+      const source = playbackContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(playbackContext.destination);
+
+      // Schedule playback seamlessly
+      const currentTime = playbackContext.currentTime;
+      if (isFirstChunk || scheduledTime < currentTime) {
+        // First chunk or we've fallen behind - start fresh
+        scheduledTime = currentTime + 0.05; // Small delay for smoothness
+        isFirstChunk = false;
+      }
+
+      source.start(scheduledTime);
+      scheduledTime += audioBuffer.duration;
+    }
+
+    // Reset audio state when stopping
+    function resetAudio() {
+      if (playbackContext) {
+        playbackContext.close();
+        playbackContext = null;
+      }
+      scheduledTime = 0;
+      isFirstChunk = true;
+    }
+
+    // Event listeners
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+
+    // Start connection
+    connect();
+  </script>
+</body>
+</html>

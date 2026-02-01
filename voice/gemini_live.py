@@ -5,6 +5,7 @@ import base64
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import AsyncIterator, Callable, Optional
 
 import weave
@@ -13,6 +14,7 @@ from google.genai import types
 
 from state.session import SessionState
 from state.context import ConversationContext
+from voice.agent_bridge import AgentToolBridge
 
 
 @dataclass
@@ -77,6 +79,10 @@ class GeminiLiveClient:
         self._on_tool_call: Optional[Callable[[str, dict], str]] = None
         self._on_turn_complete: Optional[Callable[[], None]] = None
 
+        # Agent bridge for ADK tool integration
+        self._agent_bridge = AgentToolBridge(session_id=session_id, user_id=user_id)
+        self.set_tool_callback(self._agent_bridge.handle_tool_call)
+
     def set_audio_callback(self, callback: Callable[[bytes], None]):
         """Set callback for receiving audio data."""
         self._on_audio = callback
@@ -93,9 +99,27 @@ class GeminiLiveClient:
         """Set callback for when model finishes responding."""
         self._on_turn_complete = callback
 
+    def _load_agent_prompt(self, name: str) -> Optional[str]:
+        """Load an agent prompt from the config/prompts directory.
+
+        Args:
+            name: Prompt file name (without .txt extension)
+
+        Returns:
+            Prompt content or None if not found
+        """
+        prompt_path = Path(__file__).parent.parent / "config" / "prompts" / f"{name}.txt"
+        if prompt_path.exists():
+            return prompt_path.read_text()
+        return None
+
     def _build_system_instruction(self) -> str:
         """Build the system instruction with personalized context."""
-        base_instruction = self.config.system_instruction or self._get_default_instruction()
+        # Try to load the rich ADK main agent prompt
+        base_instruction = self.config.system_instruction
+        if not base_instruction:
+            loaded_prompt = self._load_agent_prompt("main_agent")
+            base_instruction = loaded_prompt if loaded_prompt else self._get_default_instruction()
 
         # Add personalized context from memory
         personalized = self.context.get_personalized_context()
@@ -131,10 +155,14 @@ the user's current emotional state and engagement level.
 Never be preachy or give long explanations. Quick, supportive responses only."""
 
     def _build_tools(self) -> list:
-        """Build tool definitions for Gemini Live API."""
+        """Build tool definitions for Gemini Live API.
+
+        Includes all ADK agent tools for comprehensive support.
+        """
         return [
             {
                 "function_declarations": [
+                    # === Feedback Loop Agent Tools ===
                     {
                         "name": "schedule_checkin",
                         "description": "Schedule a check-in with the user after specified minutes",
@@ -150,8 +178,35 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                         }
                     },
                     {
+                        "name": "get_time_since_last_checkin",
+                        "description": "Get time elapsed since the last check-in with the user",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {}
+                        }
+                    },
+                    {
+                        "name": "log_micro_win",
+                        "description": "Log a micro-win to celebrate the user's progress",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "description": {
+                                    "type": "string",
+                                    "description": "What the user accomplished"
+                                },
+                                "category": {
+                                    "type": "string",
+                                    "description": "Category of win (task, emotional, focus, etc.)"
+                                }
+                            },
+                            "required": ["description"]
+                        }
+                    },
+                    # === Task Agent Tools ===
+                    {
                         "name": "create_microsteps",
-                        "description": "Break a task into micro-steps",
+                        "description": "Break a task into micro-steps (2-5 minutes each)",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -168,27 +223,48 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                         }
                     },
                     {
-                        "name": "mark_step_complete",
-                        "description": "Mark the current step as complete",
+                        "name": "get_current_step",
+                        "description": "Get the current step the user should work on",
                         "parameters": {
                             "type": "object",
                             "properties": {}
                         }
                     },
                     {
-                        "name": "log_win",
-                        "description": "Log a micro-win for positive reinforcement",
+                        "name": "mark_step_complete",
+                        "description": "Mark the current step as complete and move to next",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {}
+                        }
+                    },
+                    {
+                        "name": "get_current_time",
+                        "description": "Get the current time for time-awareness",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {}
+                        }
+                    },
+                    {
+                        "name": "create_reminder",
+                        "description": "Create a reminder for a task",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "description": {
+                                "task": {
                                     "type": "string",
-                                    "description": "What the user accomplished"
+                                    "description": "What to remind about"
+                                },
+                                "minutes": {
+                                    "type": "integer",
+                                    "description": "Minutes until reminder"
                                 }
                             },
-                            "required": ["description"]
+                            "required": ["task", "minutes"]
                         }
                     },
+                    # === Emotional Agent Tools ===
                     {
                         "name": "start_breathing_exercise",
                         "description": "Guide a quick breathing exercise for regulation",
@@ -204,10 +280,50 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                     },
                     {
                         "name": "sensory_check",
-                        "description": "Prompt a sensory environment check",
+                        "description": "Prompt a quick sensory environment check (noise, light, body)",
                         "parameters": {
                             "type": "object",
                             "properties": {}
+                        }
+                    },
+                    {
+                        "name": "grounding_exercise",
+                        "description": "Start a grounding exercise to help with overwhelm or anxiety",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "technique": {
+                                    "type": "string",
+                                    "description": "Type of grounding: 5-4-3-2-1, body_scan, or simple"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "name": "suggest_break",
+                        "description": "Suggest a structured break when user needs to reset",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "duration_minutes": {
+                                    "type": "integer",
+                                    "description": "Suggested break duration (2, 5, or longer)"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "name": "reframe_thought",
+                        "description": "Provide a cognitive reframe for negative thought patterns",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "thought_type": {
+                                    "type": "string",
+                                    "description": "Type: perfectionism, catastrophizing, rsd, overwhelm, imposter"
+                                }
+                            },
+                            "required": ["thought_type"]
                         }
                     }
                 ]
@@ -257,11 +373,15 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
     @weave.op
     async def disconnect(self):
         """Disconnect from Gemini Live API."""
+        self._is_connected = False
         if self._session_cm:
-            await self._session_cm.__aexit__(None, None, None)
+            try:
+                await self._session_cm.__aexit__(None, None, None)
+            except RuntimeError:
+                # Ignore "asynchronous generator is already running" on interrupt
+                pass
             self._session_cm = None
             self._session = None
-        self._is_connected = False
         print("Disconnected from Gemini Live API")
 
     @property

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from google.adk import Agent
-from google.adk.tools import tool
+from google.adk.tools import FunctionTool
 
 
 def _load_prompt(name: str) -> str:
@@ -13,7 +13,6 @@ def _load_prompt(name: str) -> str:
     return ""
 
 
-@tool
 def start_breathing_exercise(breaths: int = 3) -> str:
     """Start a quick breathing exercise.
 
@@ -28,7 +27,6 @@ def start_breathing_exercise(breaths: int = 3) -> str:
     return f"Let's take {breaths} slow breaths together. I'll count with you."
 
 
-@tool
 def sensory_check() -> str:
     """Prompt a quick sensory environment check.
 
@@ -38,7 +36,6 @@ def sensory_check() -> str:
     return "Quick sensory check - is it the noise, the light, or something in your body that's bothering you?"
 
 
-@tool
 def grounding_exercise(technique: str = "5-4-3-2-1") -> str:
     """Start a grounding exercise.
 
@@ -56,7 +53,6 @@ def grounding_exercise(technique: str = "5-4-3-2-1") -> str:
     return techniques.get(technique, techniques["simple"])
 
 
-@tool
 def suggest_break(duration_minutes: int = 5) -> str:
     """Suggest a structured break.
 
@@ -74,7 +70,6 @@ def suggest_break(duration_minutes: int = 5) -> str:
         return f"Let's take a proper {duration_minutes}-minute break. Set a timer and really step away."
 
 
-@tool
 def reframe_thought(thought_type: str) -> str:
     """Provide a cognitive reframe for common negative thought patterns.
 
@@ -113,5 +108,11 @@ Handle:
 
 Keep interventions SHORT and actionable. Voice-friendly only.
 """,
-    tools=[start_breathing_exercise, sensory_check, grounding_exercise, suggest_break, reframe_thought],
+    tools=[
+        FunctionTool(start_breathing_exercise),
+        FunctionTool(sensory_check),
+        FunctionTool(grounding_exercise),
+        FunctionTool(suggest_break),
+        FunctionTool(reframe_thought),
+    ],
 )

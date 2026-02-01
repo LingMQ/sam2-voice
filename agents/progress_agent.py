@@ -5,14 +5,13 @@ from datetime import datetime
 from typing import Optional
 
 from google.adk import Agent
-from google.adk.tools import tool
+from google.adk.tools import FunctionTool
 
 
 # In-memory progress storage for MVP
 _user_progress: dict[str, dict] = {}
 
 
-@tool
 def record_session_metric(
     user_id: str,
     metric: str,
@@ -43,7 +42,6 @@ def record_session_metric(
     return f"Recorded {metric}={value} for user"
 
 
-@tool
 def get_user_patterns(user_id: str) -> str:
     """Get observed patterns for a user.
 
@@ -67,7 +65,6 @@ def get_user_patterns(user_id: str) -> str:
     return "Observed patterns:\n" + "\n".join(summary)
 
 
-@tool
 def update_optimal_checkin(user_id: str, minutes: float) -> str:
     """Update the optimal check-in interval for a user.
 
@@ -86,7 +83,6 @@ def update_optimal_checkin(user_id: str, minutes: float) -> str:
     return f"Updated optimal check-in interval to {minutes} minutes"
 
 
-@tool
 def get_session_stats(user_id: str) -> str:
     """Get statistics for the current session.
 
@@ -110,7 +106,6 @@ def get_session_stats(user_id: str) -> str:
     return f"Session stats: {task_completions} tasks completed, {total_focus_time:.1f} min focused time"
 
 
-@tool
 def suggest_adaptation(user_id: str, current_approach: str) -> str:
     """Suggest an adaptation based on user patterns.
 
@@ -159,5 +154,11 @@ Key metrics to track:
 Keep analysis internal - only surface actionable insights to other agents.
 Responses to users should still be brief and supportive.
 """,
-    tools=[record_session_metric, get_user_patterns, update_optimal_checkin, get_session_stats, suggest_adaptation],
+    tools=[
+        FunctionTool(record_session_metric),
+        FunctionTool(get_user_patterns),
+        FunctionTool(update_optimal_checkin),
+        FunctionTool(get_session_stats),
+        FunctionTool(suggest_adaptation),
+    ],
 )

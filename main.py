@@ -49,8 +49,11 @@ async def main():
     """Main entry point with argument parsing."""
     load_dotenv()
 
-    # Initialize Weave for observability
-    weave.init('lingmiaojiayou-/hackathon')
+    # Initialize Weave for observability (optional - skip if not logged in)
+    try:
+        weave.init('lingmiaojiayou-/hackathon')
+    except Exception as e:
+        print(f"Weave initialization skipped: {e}")
 
     args = parse_args()
 
