@@ -1,8 +1,89 @@
 # Sam2 Voice
 
-Voice assistant for ADHD/Autism support using Gemini Live API with tool calling and self-improving memory system.
+**Voice assistant for ADHD/Autism support** using Gemini Live API with Weave observability, custom evaluation scorers, and self-improving memory system.
 
-## System Architecture
+> Built for [WeaveHacks 3](https://www.notion.so/wandbai/WeaveHacks-3-participant-logistics-2f4e2f5c7ef380ca9a3cdebb8f8d0d24) 🚀
+
+## ✨ Key Features
+
+- **Real-time Voice Conversations** - Gemini Live API for natural speech interaction
+- **ADHD/Autism-Optimized** - 13 specialized tools for task breakdown, emotional regulation, and micro-feedback
+- **Weave Observability** - Full tracing of voice sessions, tool calls, and user interactions
+- **Custom Evaluation Framework** - Scorers for brevity, supportiveness, tool usage, and response quality
+- **Self-Improving Memory** - Redis-backed vector search learns from past successful interventions
+
+## 🔍 Weave Integration
+
+### Observability (`@weave.op` Tracing)
+
+Every critical function is traced with `@weave.op` for full observability:
+
+```python
+# voice/gemini_live.py - Core voice interactions
+@weave.op
+async def connect(self) -> bool: ...
+
+@weave.op
+async def send_text(self, text: str): ...
+
+@weave.op
+async def _handle_tool_call(self, name: str, args: dict) -> str: ...
+
+# observability/session_tracker.py - Session metrics
+@weave.op
+def log_session_summary(self) -> dict: ...
+
+@weave.op
+def mark_intervention_successful(...) -> dict: ...
+```
+
+### Session Tracking
+
+The `SessionTracker` logs rich metrics to Weave:
+- Session duration and productivity
+- Tool calls with arguments and results
+- Task/step completion events
+- Emotional intervention frequency
+- Overall effectiveness scores
+
+```python
+# Automatic Weave attributes on every session
+weave.attributes({
+    "session_id": session_id,
+    "user_id": user_id,
+    "session_duration_minutes": duration,
+    "session_productive": steps_completed > 0,
+})
+```
+
+### Custom Evaluation Scorers
+
+Four specialized scorers evaluate response quality:
+
+| Scorer | Weight | Purpose |
+|--------|--------|---------|
+| `brevity_scorer` | 30% | Voice responses should be 1-2 sentences (10-30 words) |
+| `supportiveness_scorer` | 40% | Detects positive vs. judgmental language |
+| `tool_usage_scorer` | 30% | Validates correct tool selection for scenarios |
+| `response_quality_scorer` | Combined | Weighted aggregate of all scorers |
+
+```bash
+# Run evaluation
+python -m eval.run_eval                    # Full evaluation
+python -m eval.run_eval --category task    # Specific category
+```
+
+### Evaluation Dataset
+
+15 curated scenarios across 6 categories:
+- **task_breakdown** - "Help me clean my room"
+- **progress** - "I finished that step"
+- **emotional** - "I'm feeling overwhelmed"
+- **checkin** - "Remind me in a few minutes"
+- **general** - "Thanks for helping"
+- **onboarding** - "What can you help with?"
+
+## 🏗️ System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -17,11 +98,11 @@ Voice assistant for ADHD/Autism support using Gemini Live API with tool calling 
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Python Backend (FastAPI)                      │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │                    GeminiLiveClient                         ││
+│  │              GeminiLiveClient (@weave.op traced)            ││
 │  │  ┌─────────────────┐    ┌────────────────────────────────┐  ││
 │  │  │ System Prompt   │    │      AgentToolBridge           │  ││
 │  │  │ + Memory Context│    │  ┌──────────────────────────┐  │  ││
-│  │  │ + Dynamic Context│   │  │ 13 Tools:                │  │  ││
+│  │  │ + Dynamic Context│   │  │ 13 Tools (all traced):   │  │  ││
 │  │  │                 │    │  │ • create_microsteps      │  │  ││
 │  │  │ ADHD/Autism     │    │  │ • mark_step_complete     │  │  ││
 │  │  │ guidance        │    │  │ • start_breathing_exercise│ │  ││
@@ -37,6 +118,12 @@ Voice assistant for ADHD/Autism support using Gemini Live API with tool calling 
 │  │  │  • Finds similar past interventions                 │  ││
 │  │  │  • Injects context for self-improvement             │  ││
 │  │  └──────────────────────────────────────────────────────┘  ││
+│  │  ┌──────────────────────────────────────────────────────┐  ││
+│  │  │         SessionTracker (Weave Observability)         │  ││
+│  │  │  • Logs session summaries to Weave                   │  ││
+│  │  │  • Tracks tool calls, completions, effectiveness     │  ││
+│  │  │  • Enables feedback and intervention learning        │  ││
+│  │  └──────────────────────────────────────────────────────┘  ││
 │  └─────────────────────────────────────────────────────────────┘│
 └────────────────────────────┬────────────────────────────────────┘
                              │
@@ -47,17 +134,7 @@ Voice assistant for ADHD/Autism support using Gemini Live API with tool calling 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## How It Works
-
-The system uses **Gemini Live API** for real-time voice conversations:
-
-1. **Audio Input**: Browser captures microphone audio and streams via WebSocket
-2. **Gemini Live**: Processes audio, handles speech-to-text, generates responses, and text-to-speech
-3. **Tool Calling**: Gemini Live calls tools (via `AgentToolBridge`) for task management, emotional support, etc.
-4. **Memory System**: Redis stores past interventions and injects relevant context into conversations
-5. **Audio Output**: Generated speech is streamed back to the browser
-
-## Quick Start
+## 🚀 Quick Start
 
 ### 1. Install
 
@@ -74,6 +151,7 @@ cp .env.example .env
 # Edit .env and add:
 # GOOGLE_API_KEY=your-key-from-aistudio.google.com
 # REDIS_URL=redis://default:password@host:port  # Optional: for memory system
+# WEAVE_PROJECT=your-weave-project              # For observability
 ```
 
 ### 3. Run
@@ -89,56 +167,22 @@ uvicorn web.app:app --host 0.0.0.0 --port 8000
 python main.py
 ```
 
-## Example Prompts
-
-| Say this | Triggers |
-|----------|----------|
-| "Help me break down cleaning my room" | `create_microsteps` |
-| "I finished that step" | `mark_step_complete` |
-| "I'm feeling overwhelmed" | `reframe_thought` |
-| "I need a breathing exercise" | `start_breathing_exercise` |
-| "Do a sensory check" | `sensory_check` |
-
-## Project Structure
-
-```
-sam2-voice/
-├── web/
-│   ├── app.py                 # FastAPI backend + WebSocket
-│   └── static/
-│       ├── index.html         # Main UI
-│       ├── browser_audio.html # Classic UI
-│       └── calm_ui.html       # Calm UI variant
-├── voice/
-│   ├── gemini_live.py         # Gemini Live API client
-│   ├── agent_bridge.py        # Tool call handler
-│   ├── bot.py                 # Terminal-based voice bot
-│   └── audio.py               # Audio capture/playback
-├── agents/                    # ADK agent definitions (not currently used in voice flow)
-│   ├── main_agent.py          # Root orchestrator
-│   ├── task_agent.py          # Task breakdown
-│   ├── emotional_agent.py     # Emotional support
-│   ├── feedback_loop_agent.py # Check-ins & reinforcement
-│   ├── aba_agent.py           # ABA techniques
-│   └── progress_agent.py      # Progress tracking
-├── memory/
-│   ├── redis_memory.py        # Redis memory with vector search
-│   ├── embeddings.py          # Embedding generation
-│   ├── reflection.py          # Session reflection
-│   ├── health.py              # Health checks
-│   └── user_profile.py        # User profile management
-├── state/
-│   ├── session.py             # Session state management
-│   └── context.py             # Conversation context
-├── config/prompts/
-│   └── main_agent.md          # System prompt for Gemini
-└── tests/
-    ├── test_memory_system.py  # Memory system tests
-    ├── test_dynamic_context.py # Dynamic context tests
-    └── ...
+**Run evaluation:**
+```bash
+python -m eval.run_eval
 ```
 
-## Available Tools (13)
+## 💬 Example Prompts
+
+| Say this | Triggers | Category |
+|----------|----------|----------|
+| "Help me break down cleaning my room" | `create_microsteps` | task_breakdown |
+| "I finished that step" | `mark_step_complete` | progress |
+| "I'm feeling overwhelmed" | `start_breathing_exercise` | emotional |
+| "Everything is too loud" | `sensory_check` | emotional |
+| "Remind me in 5 minutes" | `schedule_checkin` | checkin |
+
+## 🛠️ Available Tools (13)
 
 | Category | Tools |
 |----------|-------|
@@ -146,9 +190,9 @@ sam2-voice/
 | **Emotional** | `start_breathing_exercise`, `sensory_check`, `grounding_exercise`, `suggest_break`, `reframe_thought` |
 | **Feedback** | `schedule_checkin`, `get_time_since_last_checkin`, `log_micro_win` |
 
-## Self-Improving Memory System
+## 🧠 Self-Improving Memory System
 
-The voice assistant includes a Redis-backed memory system that learns from past interactions:
+The Redis-backed memory system learns from past interactions:
 
 - **Vector Search**: Finds similar past interventions using semantic similarity
 - **Dynamic Context Injection**: Automatically injects relevant past successes into conversations
@@ -164,7 +208,37 @@ The voice assistant includes a Redis-backed memory system that learns from past 
 - ✅ User-specific memory and personalization
 - ✅ Production-ready with health checks, logging, and error handling
 
-### Testing
+## 📁 Project Structure
+
+```
+sam2-voice/
+├── web/
+│   ├── app.py                 # FastAPI backend + WebSocket
+│   └── static/                # Browser UIs
+├── voice/
+│   ├── gemini_live.py         # Gemini Live API client (@weave.op traced)
+│   ├── agent_bridge.py        # Tool call handler
+│   └── bot.py                 # Terminal-based voice bot
+├── eval/
+│   ├── run_eval.py            # Weave evaluation runner
+│   ├── scorers.py             # Custom evaluation scorers
+│   ├── dataset.py             # Evaluation dataset
+│   └── model.py               # Weave Model wrapper
+├── observability/
+│   ├── session_tracker.py     # Session metrics for Weave
+│   └── scorers.py             # Additional scorers
+├── memory/
+│   ├── redis_memory.py        # Redis memory with vector search
+│   ├── embeddings.py          # Embedding generation
+│   ├── reflection.py          # Session reflection
+│   └── health.py              # Health checks
+├── agents/                    # ADK agent definitions (future work)
+├── state/                     # Session and context management
+├── config/prompts/            # System prompts
+└── tests/                     # Test suite
+```
+
+## 🧪 Testing
 
 ```bash
 # Test memory system
@@ -175,8 +249,16 @@ pytest tests/test_dynamic_context.py -v
 
 # Health check
 python scripts/health_check.py <user_id>
+
+# Run Weave evaluation
+python -m eval.run_eval
 ```
 
-## Future Work
+## 📊 View Results in Weave
 
-The `agents/` directory contains ADK (Agent Development Kit) agent definitions that could be integrated for more sophisticated multi-agent orchestration in the future.
+After running the application or evaluation, view traces and metrics at:
+- **Weave Dashboard**: https://wandb.ai/your-project/weave
+
+---
+
+Built with ❤️ for neurodivergent users who deserve better support tools.
