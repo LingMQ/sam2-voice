@@ -15,9 +15,7 @@ from voice.gemini_live import GeminiLiveClient, GeminiLiveConfig
 from memory.redis_memory import RedisUserMemory
 from memory.health import MemoryHealthCheck
 from memory.debug import MemoryDebugger
-from agents.feedback_loop_agent import _scheduled_checkins
-from datetime import datetime, timedelta
-from memory.user_profile import UserProfileManager
+from memory.user_profile import UserProfileManager, UserAuthManager
 
 load_dotenv()
 
@@ -58,6 +56,92 @@ def calm_ui():
 def test_page():
     """Serve the memory test page."""
     return FileResponse(static_dir / "memory_test.html")
+
+
+# =============================================
+# Authentication Endpoints
+# =============================================
+
+@app.post("/api/auth/register")
+async def register_user(
+    name: str = Query(..., min_length=1),
+    email: str = Query(..., min_length=3),
+    password: str = Query(..., min_length=4)
+):
+    """Register a new user account."""
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return JSONResponse({"success": False, "error": "REDIS_URL not configured"}, status_code=500)
+
+    try:
+        auth = UserAuthManager(redis_url)
+        success, message, account = await auth.register(name, password, email if email else None)
+
+        if not success:
+            return JSONResponse({"success": False, "error": message}, status_code=400)
+
+        # Also create a profile for the user
+        profile_manager = UserProfileManager(redis_url)
+        await profile_manager.get_or_create(account.user_id)
+
+        return JSONResponse({
+            "success": True,
+            "message": message,
+            "user": {
+                "id": account.user_id,
+                "name": account.name,
+                "email": account.email,
+                "created_at": account.created_at
+            }
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/auth/login")
+async def login_user(
+    email: str = Query(...),
+    password: str = Query(...)
+):
+    """Login with email and password."""
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return JSONResponse({"success": False, "error": "REDIS_URL not configured"}, status_code=500)
+
+    try:
+        auth = UserAuthManager(redis_url)
+        success, message, account = await auth.login(email, password)
+
+        if not success:
+            return JSONResponse({"success": False, "error": message}, status_code=401)
+
+        return JSONResponse({
+            "success": True,
+            "message": message,
+            "user": {
+                "id": account.user_id,
+                "name": account.name,
+                "email": account.email,
+                "last_login": account.last_login
+            }
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/auth/check")
+async def check_user_exists(email: str = Query(...)):
+    """Check if a user with the given email exists."""
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return JSONResponse({"exists": False, "error": "REDIS_URL not configured"})
+
+    try:
+        auth = UserAuthManager(redis_url)
+        exists = await auth.user_exists(email)
+        return JSONResponse({"exists": exists})
+    except Exception as e:
+        return JSONResponse({"exists": False, "error": str(e)})
 
 
 @app.get("/api/health")

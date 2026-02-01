@@ -785,43 +785,59 @@
         <span class="welcome-avatar-icon" aria-hidden="true">👋</span>
       </div>
 
-      <h1>Welcome to Sam</h1>
-      <p class="welcome-subtitle">
-        Your personal voice companion. Let's get you set up.
+      <h1 id="authTitle">Welcome to Sam</h1>
+      <p class="welcome-subtitle" id="authSubtitle">
+        Your personal voice companion. Create an account to get started.
       </p>
 
       <form class="login-form" id="loginForm">
-        <div class="form-group">
+        <div class="form-group" id="nameGroup">
           <label class="form-label" for="userName">Your Name</label>
           <input
             type="text"
             class="form-input"
             id="userName"
             placeholder="Enter your name"
-            required
             autocomplete="name"
           >
         </div>
         <div class="form-group">
-          <label class="form-label" for="userEmail">Email (optional)</label>
+          <label class="form-label" for="userEmail">Email</label>
           <input
             type="email"
             class="form-input"
             id="userEmail"
             placeholder="your@email.com"
+            required
             autocomplete="email"
           >
         </div>
+        <div class="form-group">
+          <label class="form-label" for="userPassword">Password</label>
+          <input
+            type="password"
+            class="form-input"
+            id="userPassword"
+            placeholder="Enter your password"
+            required
+            minlength="4"
+            autocomplete="current-password"
+          >
+        </div>
         <div class="action-bar">
-          <button type="submit" class="btn btn-primary" id="loginBtn">
+          <button type="submit" class="btn btn-primary" id="authBtn">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
               <polyline points="10 17 15 12 10 7"/>
               <line x1="15" y1="12" x2="3" y2="12"/>
             </svg>
-            Get Started
+            <span id="authBtnText">Create Account</span>
           </button>
         </div>
+        <p style="text-align: center; margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-muted);">
+          <span id="authToggleText">Already have an account?</span>
+          <a href="#" id="authToggleLink" style="color: var(--primary); text-decoration: none; font-weight: 500;">Sign in</a>
+        </p>
       </form>
     </section>
 
@@ -940,6 +956,14 @@
     const loginForm = $('loginForm');
     const userNameInput = $('userName');
     const userEmailInput = $('userEmail');
+    const userPasswordInput = $('userPassword');
+    const nameGroup = $('nameGroup');
+    const authTitle = $('authTitle');
+    const authSubtitle = $('authSubtitle');
+    const authBtn = $('authBtn');
+    const authBtnText = $('authBtnText');
+    const authToggleText = $('authToggleText');
+    const authToggleLink = $('authToggleLink');
     const welcomeSection = $('welcomeSection');
     const conversationSection = $('conversationSection');
     const pausedSection = $('pausedSection');
@@ -969,14 +993,101 @@
 
     // User state
     let currentUser = null;
+    let isLoginMode = false;  // false = register, true = login
 
     // =============================================
-    // USER MANAGEMENT
+    // AUTHENTICATION
     // =============================================
-    function generateUserId(name, email) {
-      // Create a consistent user ID from name and email
-      const base = email || name.toLowerCase().replace(/\s+/g, '_');
-      return 'user_' + base.replace(/[^a-z0-9_@.-]/gi, '').substring(0, 50);
+    function toggleAuthMode() {
+      isLoginMode = !isLoginMode;
+      updateAuthUI();
+    }
+
+    function updateAuthUI() {
+      if (isLoginMode) {
+        // Login mode
+        authTitle.textContent = 'Welcome Back';
+        authSubtitle.textContent = 'Sign in to continue your journey.';
+        authBtnText.textContent = 'Sign In';
+        authToggleText.textContent = "Don't have an account?";
+        authToggleLink.textContent = 'Create one';
+        nameGroup.style.display = 'none';
+        userNameInput.required = false;
+      } else {
+        // Register mode
+        authTitle.textContent = 'Welcome to Sam';
+        authSubtitle.textContent = 'Your personal voice companion. Create an account to get started.';
+        authBtnText.textContent = 'Create Account';
+        authToggleText.textContent = 'Already have an account?';
+        authToggleLink.textContent = 'Sign in';
+        nameGroup.style.display = 'block';
+        userNameInput.required = true;
+      }
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+
+      const email = userEmailInput.value.trim();
+      const password = userPasswordInput.value;
+      const name = userNameInput.value.trim();
+
+      if (!email || !password) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+      }
+
+      if (!isLoginMode && !name) {
+        showToast('Please enter your name', 'error');
+        return;
+      }
+
+      // Disable button during request
+      authBtn.disabled = true;
+      authBtnText.textContent = isLoginMode ? 'Signing in...' : 'Creating account...';
+
+      try {
+        let response;
+        if (isLoginMode) {
+          // Login
+          response = await fetch(`/api/auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
+            method: 'POST'
+          });
+        } else {
+          // Register
+          response = await fetch(`/api/auth/register?name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
+            method: 'POST'
+          });
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+          // Save user to localStorage
+          currentUser = {
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email
+          };
+          localStorage.setItem('sam2_user', JSON.stringify(currentUser));
+
+          showToast(`Welcome${isLoginMode ? ' back' : ''}, ${data.user.name}!`);
+          showWelcomeSection();
+
+          // Connect WebSocket
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            connect();
+          }
+        } else {
+          showToast(data.error || 'Authentication failed', 'error');
+        }
+      } catch (err) {
+        console.error('Auth error:', err);
+        showToast('Connection error. Please try again.', 'error');
+      } finally {
+        authBtn.disabled = false;
+        updateAuthUI();
+      }
     }
 
     function loadUser() {
@@ -992,17 +1103,6 @@
       return false;
     }
 
-    function saveUser(name, email) {
-      const userId = generateUserId(name, email);
-      currentUser = {
-        id: userId,
-        name: name,
-        email: email || null,
-        createdAt: new Date().toISOString()
-      };
-      localStorage.setItem('sam2_user', JSON.stringify(currentUser));
-    }
-
     function logout() {
       currentUser = null;
       localStorage.removeItem('sam2_user');
@@ -1010,6 +1110,8 @@
       if (ws) {
         ws.close();
       }
+      isLoginMode = true;  // Switch to login mode for returning users
+      updateAuthUI();
       showLoginSection();
     }
 
@@ -1309,25 +1411,13 @@
     // =============================================
     // EVENT LISTENERS
     // =============================================
-    // Login form
-    loginForm.addEventListener('submit', (e) => {
+    // Login/Register form
+    loginForm.addEventListener('submit', handleAuth);
+
+    // Toggle between login and register
+    authToggleLink.addEventListener('click', (e) => {
       e.preventDefault();
-      const name = userNameInput.value.trim();
-      const email = userEmailInput.value.trim();
-
-      if (!name) {
-        showToast('Please enter your name', 'error');
-        return;
-      }
-
-      saveUser(name, email);
-      showWelcomeSection();
-      showToast(`Welcome, ${name}!`);
-
-      // Connect WebSocket after login
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        connect();
-      }
+      toggleAuthMode();
     });
 
     // Logout
@@ -1375,15 +1465,18 @@
     // =============================================
     // INIT
     // =============================================
+    // Initialize auth UI
+    updateAuthUI();
+
     // Check for existing user session
     if (loadUser()) {
-      // User already logged in
+      // User already logged in (from localStorage)
       showWelcomeSection();
       connect();
     } else {
-      // Show login
+      // Show login/register
       showLoginSection();
-      setStatus('', 'Please log in');
+      setStatus('', 'Please sign in');
     }
 
     // Check microphone support on load
