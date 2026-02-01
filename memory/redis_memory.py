@@ -262,6 +262,62 @@ class RedisUserMemory:
 
         return "\n\n".join(context_parts) if context_parts else "New user - no history yet."
 
+    async def get_dynamic_context(self, user_message: str, k: int = 3) -> str:
+        """Get dynamic context based on current user message.
+        
+        Finds similar past interventions and formats them as few-shot examples.
+        This enables the agent to learn from past successful interactions.
+        
+        Args:
+            user_message: Current user message to find similar interventions for
+            k: Number of similar interventions to retrieve
+            
+        Returns:
+            Formatted context string with similar interventions as examples
+        """
+        if not user_message or not user_message.strip():
+            return ""
+        
+        try:
+            # Get embedding for current user message
+            from memory.embeddings import get_embedding
+            query_embedding = await get_embedding(user_message)
+            
+            # Find similar interventions
+            similar = await self.find_similar_interventions(
+                query_embedding=query_embedding,
+                k=k,
+                successful_only=True  # Only use successful interventions as examples
+            )
+            
+            if not similar:
+                return ""
+            
+            # Format as few-shot examples
+            examples = []
+            for i, intervention in enumerate(similar, 1):
+                similarity = intervention.get("similarity", 0.0)
+                # Only include high-quality matches (similarity > 0.7)
+                if similarity > 0.7:
+                    examples.append(
+                        f"Example {i} (similarity: {similarity:.2f}):\n"
+                        f"  User said: \"{intervention.get('context', 'N/A')}\"\n"
+                        f"  Agent did: {intervention.get('intervention', 'N/A')}\n"
+                        f"  Result: {intervention.get('outcome', 'N/A')}"
+                    )
+            
+            if examples:
+                return (
+                    "## Similar successful interventions from past sessions:\n"
+                    "Use these as inspiration for your response:\n\n" +
+                    "\n\n".join(examples)
+                )
+            
+            return ""
+        except Exception as e:
+            print(f"Error getting dynamic context: {e}")
+            return ""
+
     def get_stats(self) -> Dict:
         """Get memory statistics for this user.
         
