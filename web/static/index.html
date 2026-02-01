@@ -640,6 +640,98 @@
     }
 
     /* =============================================
+       LOGIN SECTION
+       ============================================= */
+    .login-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: var(--space-8) 0;
+    }
+
+    .login-form {
+      width: 100%;
+      max-width: 320px;
+      margin-top: var(--space-6);
+    }
+
+    .form-group {
+      margin-bottom: var(--space-4);
+      text-align: left;
+    }
+
+    .form-label {
+      display: block;
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-2);
+    }
+
+    .form-input {
+      width: 100%;
+      height: 52px;
+      padding: 0 var(--space-5);
+      font-family: inherit;
+      font-size: var(--text-base);
+      color: var(--text-primary);
+      background: var(--bg-elevated);
+      border: 2px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .user-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-full);
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+      margin-bottom: var(--space-4);
+    }
+
+    .user-badge-icon {
+      width: 24px;
+      height: 24px;
+      background: var(--primary-soft);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .logout-link {
+      color: var(--text-muted);
+      font-size: var(--text-sm);
+      text-decoration: none;
+      cursor: pointer;
+      margin-left: var(--space-2);
+    }
+
+    .logout-link:hover {
+      color: var(--status-error);
+      text-decoration: underline;
+    }
+
+    /* =============================================
        UTILITIES
        ============================================= */
     .hidden {
@@ -687,8 +779,60 @@
       </div>
     </header>
 
+    <!-- Login Section -->
+    <section class="login-section" id="loginSection">
+      <div class="welcome-avatar">
+        <span class="welcome-avatar-icon" aria-hidden="true">👋</span>
+      </div>
+
+      <h1>Welcome to Sam</h1>
+      <p class="welcome-subtitle">
+        Your personal voice companion. Let's get you set up.
+      </p>
+
+      <form class="login-form" id="loginForm">
+        <div class="form-group">
+          <label class="form-label" for="userName">Your Name</label>
+          <input
+            type="text"
+            class="form-input"
+            id="userName"
+            placeholder="Enter your name"
+            required
+            autocomplete="name"
+          >
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userEmail">Email (optional)</label>
+          <input
+            type="email"
+            class="form-input"
+            id="userEmail"
+            placeholder="your@email.com"
+            autocomplete="email"
+          >
+        </div>
+        <div class="action-bar">
+          <button type="submit" class="btn btn-primary" id="loginBtn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Get Started
+          </button>
+        </div>
+      </form>
+    </section>
+
     <!-- Welcome Section -->
-    <main class="welcome" id="welcomeSection">
+    <main class="welcome hidden" id="welcomeSection">
+      <div class="user-badge" id="userBadge">
+        <span class="user-badge-icon">👤</span>
+        <span id="userDisplayName">User</span>
+        <a class="logout-link" id="logoutLink">Logout</a>
+      </div>
+
       <div class="welcome-avatar">
         <span class="welcome-avatar-icon" aria-hidden="true">🎧</span>
       </div>
@@ -792,6 +936,10 @@
 
     const statusDot = $('statusDot');
     const statusText = $('statusText');
+    const loginSection = $('loginSection');
+    const loginForm = $('loginForm');
+    const userNameInput = $('userName');
+    const userEmailInput = $('userEmail');
     const welcomeSection = $('welcomeSection');
     const conversationSection = $('conversationSection');
     const pausedSection = $('pausedSection');
@@ -806,6 +954,8 @@
     const clearBtn = $('clearBtn');
     const retryBtn = $('retryBtn');
     const toastContainer = $('toastContainer');
+    const userDisplayName = $('userDisplayName');
+    const logoutLink = $('logoutLink');
 
     // =============================================
     // STATE
@@ -817,6 +967,73 @@
     let reconnectAttempts = 0;
     const MAX_RECONNECT = 3;
 
+    // User state
+    let currentUser = null;
+
+    // =============================================
+    // USER MANAGEMENT
+    // =============================================
+    function generateUserId(name, email) {
+      // Create a consistent user ID from name and email
+      const base = email || name.toLowerCase().replace(/\s+/g, '_');
+      return 'user_' + base.replace(/[^a-z0-9_@.-]/gi, '').substring(0, 50);
+    }
+
+    function loadUser() {
+      const stored = localStorage.getItem('sam2_user');
+      if (stored) {
+        try {
+          currentUser = JSON.parse(stored);
+          return true;
+        } catch (e) {
+          localStorage.removeItem('sam2_user');
+        }
+      }
+      return false;
+    }
+
+    function saveUser(name, email) {
+      const userId = generateUserId(name, email);
+      currentUser = {
+        id: userId,
+        name: name,
+        email: email || null,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem('sam2_user', JSON.stringify(currentUser));
+    }
+
+    function logout() {
+      currentUser = null;
+      localStorage.removeItem('sam2_user');
+      stopRecording();
+      if (ws) {
+        ws.close();
+      }
+      showLoginSection();
+    }
+
+    function showLoginSection() {
+      loginSection.classList.remove('hidden');
+      welcomeSection.classList.add('hidden');
+      conversationSection.classList.add('hidden');
+      pausedSection.classList.add('hidden');
+      errorBanner.classList.add('hidden');
+    }
+
+    function showWelcomeSection() {
+      loginSection.classList.add('hidden');
+      welcomeSection.classList.remove('hidden');
+      conversationSection.classList.add('hidden');
+      pausedSection.classList.add('hidden');
+      errorBanner.classList.add('hidden');
+
+      // Update user display
+      if (currentUser) {
+        userDisplayName.textContent = currentUser.name;
+      }
+    }
+
     // =============================================
     // UI HELPERS
     // =============================================
@@ -826,6 +1043,7 @@
     }
 
     function showSection(section) {
+      loginSection.classList.add('hidden');
       welcomeSection.classList.add('hidden');
       conversationSection.classList.add('hidden');
       pausedSection.classList.add('hidden');
@@ -1003,7 +1221,11 @@
 
         // Update UI
         showSection(conversationSection);
-        ws.send(JSON.stringify({ action: 'start' }));
+        // Send start with user_id for personalized memory
+        ws.send(JSON.stringify({
+          action: 'start',
+          user_id: currentUser ? currentUser.id : 'anonymous'
+        }));
 
       } catch (err) {
         console.error('Microphone error:', err);
@@ -1087,6 +1309,34 @@
     // =============================================
     // EVENT LISTENERS
     // =============================================
+    // Login form
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = userNameInput.value.trim();
+      const email = userEmailInput.value.trim();
+
+      if (!name) {
+        showToast('Please enter your name', 'error');
+        return;
+      }
+
+      saveUser(name, email);
+      showWelcomeSection();
+      showToast(`Welcome, ${name}!`);
+
+      // Connect WebSocket after login
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        connect();
+      }
+    });
+
+    // Logout
+    logoutLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+      showToast('Logged out successfully');
+    });
+
     startBtn.addEventListener('click', startRecording);
     pauseBtn.addEventListener('click', pauseSession);
     resumeBtn.addEventListener('click', resumeSession);
@@ -1125,7 +1375,16 @@
     // =============================================
     // INIT
     // =============================================
-    connect();
+    // Check for existing user session
+    if (loadUser()) {
+      // User already logged in
+      showWelcomeSection();
+      connect();
+    } else {
+      // Show login
+      showLoginSection();
+      setStatus('', 'Please log in');
+    }
 
     // Check microphone support on load
     if (!window.isSecureContext) {

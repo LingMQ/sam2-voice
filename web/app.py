@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import weave
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -17,6 +17,7 @@ from memory.health import MemoryHealthCheck
 from memory.debug import MemoryDebugger
 from agents.feedback_loop_agent import _scheduled_checkins
 from datetime import datetime, timedelta
+from memory.user_profile import UserProfileManager
 
 load_dotenv()
 
@@ -60,7 +61,7 @@ def test_page():
 
 
 @app.get("/api/health")
-async def health_check():
+async def health_check(user_id: str = Query(default="browser_user")):
     """Health check endpoint."""
     try:
         redis_url = os.getenv("REDIS_URL")
@@ -69,11 +70,10 @@ async def health_check():
                 "status": "unhealthy",
                 "error": "REDIS_URL not configured"
             })
-        
+
         health = MemoryHealthCheck(redis_url)
-        user_id = "browser_user"  # Default
         status = health.get_comprehensive_health(user_id)
-        
+
         # Ensure all values are JSON serializable
         def make_serializable(obj):
             if isinstance(obj, dict):
@@ -84,7 +84,7 @@ async def health_check():
                 return obj
             else:
                 return str(obj)
-        
+
         serializable_status = make_serializable(status)
         return JSONResponse(serializable_status)
     except Exception as e:
@@ -95,70 +95,129 @@ async def health_check():
 
 
 @app.get("/api/memory/stats")
-async def memory_stats():
-    """Get memory statistics."""
+async def memory_stats(user_id: str = Query(default="browser_user")):
+    """Get memory statistics for a specific user."""
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return JSONResponse({"error": "REDIS_URL not configured"})
-    
-    user_id = "browser_user"  # Default, could be from query param
+
     try:
         memory = RedisUserMemory(user_id=user_id, redis_url=redis_url)
         stats = memory.get_stats()
+        stats["user_id"] = user_id
         return JSONResponse(stats)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/memory/debug")
-async def memory_debug():
-    """Get memory debug information."""
+async def memory_debug(user_id: str = Query(default="browser_user")):
+    """Get memory debug information for a specific user."""
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return JSONResponse({"error": "REDIS_URL not configured"})
-    
-    user_id = "browser_user"
+
     try:
         memory = RedisUserMemory(user_id=user_id, redis_url=redis_url)
         debugger = MemoryDebugger(memory)
         summary = debugger.get_memory_summary()
+        summary["user_id"] = user_id
         return JSONResponse(summary)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/memory/interventions")
-async def get_interventions():
-    """Get stored interventions."""
+async def get_interventions(
+    user_id: str = Query(default="browser_user"),
+    limit: int = Query(default=20, ge=1, le=100)
+):
+    """Get stored interventions for a specific user."""
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return JSONResponse({"error": "REDIS_URL not configured"})
-    
-    user_id = "browser_user"
-    limit = 20  # Could be from query param
+
     try:
         memory = RedisUserMemory(user_id=user_id, redis_url=redis_url)
         debugger = MemoryDebugger(memory)
         interventions = debugger.inspect_interventions(limit=limit)
-        return JSONResponse({"interventions": interventions, "count": len(interventions)})
+        return JSONResponse({
+            "user_id": user_id,
+            "interventions": interventions,
+            "count": len(interventions)
+        })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/memory/reflections")
-async def get_reflections():
-    """Get stored reflections."""
+async def get_reflections(
+    user_id: str = Query(default="browser_user"),
+    limit: int = Query(default=10, ge=1, le=50)
+):
+    """Get stored reflections for a specific user."""
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return JSONResponse({"error": "REDIS_URL not configured"})
-    
-    user_id = "browser_user"
-    limit = 10
+
     try:
         memory = RedisUserMemory(user_id=user_id, redis_url=redis_url)
         debugger = MemoryDebugger(memory)
         reflections = debugger.inspect_reflections(limit=limit)
-        return JSONResponse({"reflections": reflections, "count": len(reflections)})
+        return JSONResponse({
+            "user_id": user_id,
+            "reflections": reflections,
+            "count": len(reflections)
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/user/profile")
+async def get_user_profile(user_id: str = Query(...)):
+    """Get user profile information."""
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return JSONResponse({"error": "REDIS_URL not configured"})
+
+    try:
+        manager = UserProfileManager(redis_url)
+        profile = await manager.get_or_create(user_id)
+        return JSONResponse({
+            "user_id": profile.user_id,
+            "diagnosis": profile.diagnosis,
+            "diagnosis_source": profile.diagnosis_source,
+            "onboarding_complete": profile.onboarding_complete,
+            "preferred_checkin_interval": profile.preferred_checkin_interval,
+            "sensory_sensitivities": profile.sensory_sensitivities
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/user/profile")
+async def update_user_profile(
+    user_id: str = Query(...),
+    diagnosis: str = Query(default=None),
+    diagnosis_source: str = Query(default=None)
+):
+    """Update user profile diagnosis information."""
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return JSONResponse({"error": "REDIS_URL not configured"})
+
+    try:
+        manager = UserProfileManager(redis_url)
+        if diagnosis and diagnosis_source:
+            await manager.update_diagnosis(user_id, diagnosis, diagnosis_source)
+        profile = await manager.get_or_create(user_id)
+        return JSONResponse({
+            "success": True,
+            "user_id": profile.user_id,
+            "diagnosis": profile.diagnosis,
+            "diagnosis_source": profile.diagnosis_source,
+            "onboarding_complete": profile.onboarding_complete
+        })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
