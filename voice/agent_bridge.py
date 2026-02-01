@@ -2,6 +2,8 @@
 
 from typing import Callable, Dict, Any
 
+import weave
+
 # Import ADK tool functions directly from agent modules
 # These are the underlying functions, not the @tool decorated versions
 from agents.task_agent import (
@@ -31,6 +33,7 @@ class AgentToolBridge:
         self.session_id = session_id
         self.user_id = user_id
 
+    @weave.op
     def handle_tool_call(self, name: str, args: dict) -> str:
         """Route a tool call to the appropriate implementation.
 
@@ -41,6 +44,13 @@ class AgentToolBridge:
         Returns:
             Tool result string
         """
+        # Add metadata for filtering in Weave dashboard
+        weave.attributes({
+            "user_id": self.user_id,
+            "session_id": self.session_id,
+            "tool_name": name,
+            "tool_category": self._get_tool_category(name),
+        })
         # Task agent tools
         if name == "create_microsteps":
             return self._create_microsteps(args)
@@ -201,3 +211,17 @@ class AgentToolBridge:
             "imposter": "You're learning. Everyone starts somewhere.",
         }
         return reframes.get(thought_type, "Let's pause and look at this from a different angle.")
+
+    def _get_tool_category(self, name: str) -> str:
+        """Get the category for a tool name."""
+        task_tools = {"create_microsteps", "get_current_step", "mark_step_complete", "get_current_time", "create_reminder"}
+        feedback_tools = {"schedule_checkin", "get_time_since_last_checkin", "log_micro_win", "log_win"}
+        emotional_tools = {"start_breathing_exercise", "sensory_check", "grounding_exercise", "suggest_break", "reframe_thought"}
+
+        if name in task_tools:
+            return "task"
+        elif name in feedback_tools:
+            return "feedback"
+        elif name in emotional_tools:
+            return "emotional"
+        return "unknown"

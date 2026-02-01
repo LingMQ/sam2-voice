@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import asyncio
+import os
 
 import weave
 from dotenv import load_dotenv
@@ -51,7 +52,9 @@ async def main():
 
     # Initialize Weave for observability (optional - skip if not logged in)
     try:
-        weave.init('lingmiaojiayou-/hackathon')
+        project = os.getenv("WEAVE_PROJECT", "sam2-voice")
+        weave.init(project)
+        print(f"Weave initialized: {project}")
     except Exception as e:
         print(f"Weave initialization skipped: {e}")
 
