@@ -365,15 +365,12 @@ async def ws_audio_endpoint(websocket: WebSocket):
                 elif response["type"] == "text":
                     await send_text(str(response["data"]))
                 elif response["type"] == "tool_call":
-                    # Safely convert result to string
+                    # Log tool calls to console only, don't show in UI
                     result = response.get('result', '')
-                    if isinstance(result, bytes):
-                        result_str = f"<{len(result)} bytes>"
-                    else:
-                        result_str = str(result)[:100]  # Truncate long results
-                    await send_text(f"[Tool: {response.get('name', 'unknown')} -> {result_str}]")
+                    print(f"Tool call: {response.get('name', 'unknown')} -> {str(result)[:100]}")
                 elif response["type"] == "turn_complete":
-                    await send_text("[Turn complete]")
+                    # Log to console only
+                    print("Turn complete")
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -392,34 +389,29 @@ async def ws_audio_endpoint(websocket: WebSocket):
             while is_running:
                 # Check for expired check-ins every 5 seconds
                 await asyncio.sleep(5.0)
-                
+
                 if not is_running or not client or not client.is_connected:
                     continue
-                
+
                 # Check if there's a scheduled check-in for this session
                 if session_id in _scheduled_checkins:
                     checkin_time = _scheduled_checkins[session_id]
                     now = datetime.now()
-                    
+
                     # If check-in time has passed, trigger it
                     if now >= checkin_time:
                         # Remove from schedule to prevent duplicate triggers
                         del _scheduled_checkins[session_id]
-                        
+
                         # Send a check-in message to the user
                         checkin_message = "Check-in: How are you doing? Still on track?"
                         print(f"🔔 Triggering scheduled check-in...")
                         await client.send_text(checkin_message)
-                        await send_text(f"[Check-in triggered]")
-                
+
         except asyncio.CancelledError:
             pass
         except Exception as e:
             print(f"Check-in monitor error: {e}")
-            try:
-                await send_text(f"[Check-in monitor error: {str(e)[:100]}]")
-            except:
-                pass
 
     try:
         while True:
@@ -452,17 +444,17 @@ async def ws_audio_endpoint(websocket: WebSocket):
                             try:
                                 user_id = data.get("user_id", "browser_user")
                                 memory = RedisUserMemory(user_id=user_id, redis_url=redis_url)
-                                await send_text(f"[Memory system initialized for user: {user_id}]")
-                                
-                                # Show memory context (non-blocking)
+                                print(f"Memory system initialized for user: {user_id}")
+
+                                # Load memory context (non-blocking)
                                 try:
                                     context = await memory.get_context_for_prompt()
                                     if context and context != "New user - no history yet.":
-                                        await send_text(f"[Memory context loaded: {len(context)} chars]")
+                                        print(f"Memory context loaded: {len(context)} chars")
                                 except Exception as e:
-                                    await send_text(f"[Memory context load warning: {str(e)[:100]}]")
+                                    print(f"Memory context load warning: {str(e)[:100]}")
                             except Exception as e:
-                                await send_text(f"[Memory system unavailable: {str(e)[:100]}]")
+                                print(f"Memory system unavailable: {str(e)[:100]}")
                         
                         # Create and connect Gemini client
                         config = GeminiLiveConfig(
@@ -504,18 +496,18 @@ async def ws_audio_endpoint(websocket: WebSocket):
                             await checkin_task
                         except asyncio.CancelledError:
                             pass
-                    
-                    # Generate reflection if memory is available
+
+                    # Generate reflection if memory is available (log to console only)
                     if memory and client:
                         try:
                             transcript = client.get_transcript()
                             if transcript and len(transcript) > 0:
                                 from memory.reflection import generate_reflection
                                 reflection = await generate_reflection(memory, transcript)
-                                await send_text(f"[Session reflection: {reflection[:200]}]")
+                                print(f"Session reflection generated: {reflection[:200]}")
                         except Exception as e:
-                            await send_text(f"[Reflection generation failed: {str(e)[:100]}]")
-                    
+                            print(f"Reflection generation failed: {str(e)[:100]}")
+
                     if client:
                         await client.disconnect()
                         client = None
