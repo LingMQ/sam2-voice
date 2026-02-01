@@ -4,6 +4,32 @@
 
 > Built for [WeaveHacks 3](https://www.notion.so/wandbai/WeaveHacks-3-participant-logistics-2f4e2f5c7ef380ca9a3cdebb8f8d0d24) 🚀
 
+## 📋 Project Status
+
+### ✅ What's Working
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Gemini Live API** | ✅ Working | Real-time bidirectional audio streaming, native STT/TTS, tool calling |
+| **Weave Observability** | ✅ Working | `@weave.op` tracing on voice interactions, tool calls, memory operations |
+| **Weave Evaluation** | ✅ Working | Custom scorers (brevity, supportiveness, tool usage), evaluation dataset |
+| **Redis Memory** | ✅ Working | Vector similarity search, intervention storage, dynamic context injection |
+| **13 Support Tools** | ✅ Working | Task breakdown, emotional regulation, check-ins, progress tracking |
+| **Browser UI** | ✅ Working | WebSocket audio streaming, multiple UI themes |
+
+### ⚠️ What We Tried But Didn't Complete
+
+| Feature | Status | What Happened |
+|---------|--------|---------------|
+| **Google ADK Integration** | ❌ Not Integrated | We defined multi-agent orchestration in `agents/` (main_agent, task_agent, emotional_agent, etc.) but couldn't get ADK's `run_async()` to work reliably with Gemini Live's real-time audio streaming. The agents are defined but not called in the voice flow. |
+| **ADK + Gemini Live Bridge** | ❌ Attempted | Tried routing transcribed audio through ADK agents before TTS, but hit issues with session management and response timing that caused subsequent turns to hang. |
+
+### 💡 Lessons Learned
+
+1. **Gemini Live API is powerful on its own** - Native tool calling works great without needing ADK orchestration
+2. **ADK is designed for text-based agents** - Integrating with real-time audio streaming is non-trivial
+3. **Weave made debugging much easier** - Being able to trace every call helped identify where ADK was hanging
+
 ## ✨ Key Features
 
 - **Real-time Voice Conversations** - Gemini Live API for natural speech interaction
@@ -14,13 +40,13 @@
 
 ## 🏆 Sponsor Technologies Used
 
-| Sponsor | Technology | How We Use It |
-|---------|------------|---------------|
-| **Weights & Biases** | [Weave](https://wandb.ai/site/weave) | `@weave.op` tracing on all voice interactions, tool calls, and memory operations. Custom evaluation scorers (`brevity_scorer`, `supportiveness_scorer`, `tool_usage_scorer`, `response_quality_scorer`). Session tracking with `weave.attributes()`. `weave.Evaluation` for systematic testing. |
-| **Google** | [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) | Real-time bidirectional audio streaming for voice conversations. Native speech-to-text and text-to-speech. Tool calling for 13 ADHD/Autism support functions. |
-| **Google** | [GenAI SDK](https://github.com/google/genai-python) | `google-genai` Python SDK for Gemini API access. Embedding generation via `models.embed_content()` for semantic memory search. |
-| **Google** | [ADK](https://github.com/google/adk-python) | Agent Development Kit for multi-agent orchestration (agent definitions in `agents/`). |
-| **Redis** | [Redis Stack](https://redis.io/docs/stack/) | Vector similarity search for finding relevant past interventions. User memory storage with 30-day TTL. Session state and user profiles. |
+| Sponsor | Technology | How We Use It | Status |
+|---------|------------|---------------|--------|
+| **Weights & Biases** | [Weave](https://wandb.ai/site/weave) | `@weave.op` tracing on all voice interactions, tool calls, and memory operations. Custom evaluation scorers. Session tracking with `weave.attributes()`. `weave.Evaluation` for systematic testing. | ✅ Fully integrated |
+| **Google** | [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) | Real-time bidirectional audio streaming for voice conversations. Native speech-to-text and text-to-speech. Tool calling for 13 ADHD/Autism support functions. | ✅ Fully integrated |
+| **Google** | [GenAI SDK](https://github.com/google/genai-python) | `google-genai` Python SDK for Gemini API access. Embedding generation via `models.embed_content()` for semantic memory search. | ✅ Fully integrated |
+| **Google** | [ADK](https://github.com/google/adk-python) | Agent definitions exist in `agents/` folder with 5 specialized sub-agents. **Not integrated into voice flow** - attempted but hit timing issues with real-time audio. | ⚠️ Defined, not used |
+| **Redis** | [Redis Stack](https://redis.io/docs/stack/) | Vector similarity search for finding relevant past interventions. User memory storage with 30-day TTL. Session state and user profiles. | ✅ Fully integrated |
 
 ## 🔍 Weave Integration
 
@@ -242,7 +268,13 @@ sam2-voice/
 │   ├── embeddings.py          # Embedding generation
 │   ├── reflection.py          # Session reflection
 │   └── health.py              # Health checks
-├── agents/                    # ADK agent definitions (future work)
+├── agents/                    # ADK agent definitions (defined but NOT used in voice flow)
+│   ├── main_agent.py          # Root orchestrator
+│   ├── task_agent.py          # Task breakdown agent
+│   ├── emotional_agent.py     # Emotional support agent
+│   ├── feedback_loop_agent.py # Check-in agent
+│   ├── aba_agent.py           # ABA techniques agent
+│   └── progress_agent.py      # Progress tracking agent
 ├── state/                     # Session and context management
 ├── config/prompts/            # System prompts
 └── tests/                     # Test suite
