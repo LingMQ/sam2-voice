@@ -15,7 +15,7 @@ class Sam2VoiceModel(weave.Model):
     simulating the voice bot's responses to user inputs.
     """
 
-    model_name: str = "gemini-2.5-flash-preview-05-20"
+    model_name: str = "gemini-2.0-flash"
     voice: str = "Puck"
     system_prompt: str = dedent("""
         You are a supportive voice assistant for people with ADHD and autism.
