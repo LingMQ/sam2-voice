@@ -1,6 +1,6 @@
 # Sam2 Voice
 
-Voice assistant for ADHD/Autism support using Gemini Live API with ADK agent orchestration and self-improving memory system.
+Voice assistant for ADHD/Autism support using Gemini Live API with tool calling and self-improving memory system.
 
 ## System Architecture
 
@@ -43,17 +43,27 @@ Voice assistant for ADHD/Autism support using Gemini Live API with ADK agent orc
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Gemini Live API                               │
-│              (Real-time audio streaming)                         │
+│              (Real-time audio streaming + tool calling)          │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## How It Works
+
+The system uses **Gemini Live API** for real-time voice conversations:
+
+1. **Audio Input**: Browser captures microphone audio and streams via WebSocket
+2. **Gemini Live**: Processes audio, handles speech-to-text, generates responses, and text-to-speech
+3. **Tool Calling**: Gemini Live calls tools (via `AgentToolBridge`) for task management, emotional support, etc.
+4. **Memory System**: Redis stores past interventions and injects relevant context into conversations
+5. **Audio Output**: Generated speech is streamed back to the browser
 
 ## Quick Start
 
 ### 1. Install
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install -e .
 ```
 
@@ -96,29 +106,36 @@ sam2-voice/
 ├── web/
 │   ├── app.py                 # FastAPI backend + WebSocket
 │   └── static/
-│       └── browser_audio.html # Browser UI
+│       ├── index.html         # Main UI
+│       ├── browser_audio.html # Classic UI
+│       └── calm_ui.html       # Calm UI variant
 ├── voice/
 │   ├── gemini_live.py         # Gemini Live API client
-│   ├── agent_bridge.py        # Routes tools to ADK implementations
-│   └── bot.py                 # Terminal-based voice bot
-├── agents/
+│   ├── agent_bridge.py        # Tool call handler
+│   ├── bot.py                 # Terminal-based voice bot
+│   └── audio.py               # Audio capture/playback
+├── agents/                    # ADK agent definitions (not currently used in voice flow)
 │   ├── main_agent.py          # Root orchestrator
 │   ├── task_agent.py          # Task breakdown
 │   ├── emotional_agent.py     # Emotional support
 │   ├── feedback_loop_agent.py # Check-ins & reinforcement
-│   └── ...
+│   ├── aba_agent.py           # ABA techniques
+│   └── progress_agent.py      # Progress tracking
 ├── memory/
 │   ├── redis_memory.py        # Redis memory with vector search
-│   ├── embeddings.py         # Embedding generation
+│   ├── embeddings.py          # Embedding generation
 │   ├── reflection.py          # Session reflection
 │   ├── health.py              # Health checks
-│   └── ...
-├── tests/
-│   ├── test_memory_system.py  # Memory system tests
-│   ├── test_dynamic_context.py # Dynamic context tests
-│   └── ...
-└── config/prompts/
-    └── main_agent.md          # System prompt for Gemini
+│   └── user_profile.py        # User profile management
+├── state/
+│   ├── session.py             # Session state management
+│   └── context.py             # Conversation context
+├── config/prompts/
+│   └── main_agent.md          # System prompt for Gemini
+└── tests/
+    ├── test_memory_system.py  # Memory system tests
+    ├── test_dynamic_context.py # Dynamic context tests
+    └── ...
 ```
 
 ## Available Tools (13)
@@ -155,8 +172,11 @@ pytest tests/test_memory_system.py -v
 
 # Test dynamic context injection
 pytest tests/test_dynamic_context.py -v
-python tests/test_dynamic_context_audio.py
 
 # Health check
 python scripts/health_check.py <user_id>
 ```
+
+## Future Work
+
+The `agents/` directory contains ADK (Agent Development Kit) agent definitions that could be integrated for more sophisticated multi-agent orchestration in the future.
