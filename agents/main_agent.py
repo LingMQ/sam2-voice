@@ -1,7 +1,7 @@
 """Main ADK coordinator agent with sub-agents."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from google.adk import Agent
 from google.adk.sessions import InMemorySessionService
@@ -14,9 +14,27 @@ from agents.emotional_agent import emotional_agent
 from agents.progress_agent import progress_agent
 
 
+def get_all_sub_agents() -> List[Agent]:
+    """Get all registered sub-agents for the root agent.
+    
+    This centralizes agent registration and makes it easy to add/remove agents.
+    Agents are listed in order of priority/precedence for routing decisions.
+    
+    Returns:
+        List of all sub-agents to be registered with the root agent
+    """
+    return [
+        feedback_loop_agent,  # Micro-feedback, timing, reinforcement
+        aba_agent,            # ABA therapy techniques
+        task_agent,           # Task breakdown and reminders
+        emotional_agent,      # Emotional regulation support
+        progress_agent,       # Progress tracking and adaptation
+    ]
+
+
 def _load_prompt(name: str) -> str:
     """Load a prompt from the config/prompts directory."""
-    prompt_path = Path(__file__).parent.parent / "config" / "prompts" / f"{name}.txt"
+    prompt_path = Path(__file__).parent.parent / "config" / "prompts" / f"{name}.md"
     if prompt_path.exists():
         return prompt_path.read_text()
     return ""
@@ -58,13 +76,7 @@ Available specialists:
 
 Always prioritize the user's current emotional state and engagement level.
 """,
-        sub_agents=[
-            feedback_loop_agent,
-            aba_agent,
-            task_agent,
-            emotional_agent,
-            progress_agent,
-        ],
+        sub_agents=get_all_sub_agents(),
     )
 
 

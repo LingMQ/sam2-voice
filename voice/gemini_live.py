@@ -72,7 +72,12 @@ class GeminiLiveClient:
 
         # Memory system
         self.memory = memory
-        self._memory_context: Optional[str] = None
+        self._memory_context: Optional[str] = None  # Static context loaded at start
+        self._dynamic_context_cache: Optional[str] = None  # Dynamic context for current turn
+        self._last_user_message_for_context: Optional[str] = None  # Track for dynamic context
+        self._last_assistant_response: Optional[str] = None  # Track last assistant response for context inference
+        self._turn_count = 0  # Track turns for periodic context updates
+        self._pending_dynamic_context: Optional[str] = None  # Context to inject on next turn
 
         # Session handle
         self._session = None
@@ -109,24 +114,136 @@ class GeminiLiveClient:
         """Load an agent prompt from the config/prompts directory.
 
         Args:
-            name: Prompt file name (without .txt extension)
+            name: Prompt file name (without .md extension)
 
         Returns:
             Prompt content or None if not found
         """
-        prompt_path = Path(__file__).parent.parent / "config" / "prompts" / f"{name}.txt"
+        prompt_path = Path(__file__).parent.parent / "config" / "prompts" / f"{name}.md"
         if prompt_path.exists():
             return prompt_path.read_text()
         return None
 
     async def _load_memory_context(self):
-        """Load memory context for this user."""
+        """Load static memory context for this user (reflections, stats)."""
         if self.memory:
             try:
                 self._memory_context = await self.memory.get_context_for_prompt()
             except Exception as e:
                 print(f"Warning: Could not load memory context: {e}")
                 self._memory_context = None
+
+    async def _load_dynamic_context(self, user_message: str):
+        """Load dynamic context based on current user message.
+        
+        Finds similar past interventions and caches them for injection into system prompt.
+        This enables the agent to learn from past successful interactions in real-time.
+        
+        Args:
+            user_message: Current user message to find similar interventions for
+        """
+        if not self.memory or not user_message or len(user_message.strip()) < 10:
+            self._dynamic_context_cache = None
+            return
+        
+        # Only update if message is different (avoid redundant searches)
+        if self._last_user_message_for_context == user_message:
+            return
+        
+        try:
+            # Get dynamic context with similar interventions
+            dynamic_context = await self.memory.get_dynamic_context(user_message, k=3)
+            self._dynamic_context_cache = dynamic_context
+            self._last_user_message_for_context = user_message
+            
+            # Log when dynamic context is found (for observability)
+            if dynamic_context:
+                print(f"📚 Found similar past interventions for: '{user_message[:50]}...'")
+        except Exception as e:
+            print(f"Warning: Could not load dynamic context: {e}")
+            self._dynamic_context_cache = None
+
+    async def _prepare_and_inject_dynamic_context(self):
+        """Prepare and inject dynamic context based on recent conversation patterns.
+        
+        For audio streams, we infer user intent from conversation context
+        and inject dynamic context to influence the next response.
+        
+        Strategy: 
+        1. Use assistant responses and conversation patterns to infer user topics
+        2. Find similar past interventions
+        3. Inject as context that will influence the model's next response
+        """
+        if not self.memory or not self._session:
+            return
+        
+        try:
+            # Get recent conversation messages
+            recent_messages = self.context.get_recent_messages(n=6)
+            
+            # Build query from conversation context
+            query_parts = []
+            
+            # Look for user messages first (if any from text interactions)
+            for msg in recent_messages:
+                if msg["role"] == "user":
+                    query_parts.append(msg["content"])
+            
+            # If no user messages, use assistant responses to infer topics
+            # Assistant responses often reflect what the user was asking about
+            if not query_parts and self._last_assistant_response:
+                # Extract key phrases from assistant response
+                assistant_text = self._last_assistant_response[:200]
+                query_parts.append(assistant_text)
+            
+            # Also look for patterns in recent messages that suggest user needs
+            if recent_messages:
+                for msg in recent_messages[-2:]:
+                    content = msg.get("content", "")
+                    # Look for common patterns that indicate user needs
+                    if any(keyword in content.lower() for keyword in 
+                           ["focus", "overwhelm", "task", "help", "can't", "need", "stuck", "difficult"]):
+                        query_parts.append(content)
+            
+            if not query_parts:
+                return
+            
+            # Create query from most relevant context
+            inferred_query = " ".join(query_parts[-1:])
+            
+            if len(inferred_query.strip()) < 10:
+                return
+            
+            # Get dynamic context based on inferred query
+            dynamic_context = await self.memory.get_dynamic_context(inferred_query, k=3)
+            
+            if not dynamic_context:
+                return
+            
+            # Inject context immediately so it's ready for next user interaction
+            # Format it as guidance that won't be confused with user input
+            context_message = f"""<memory_context>
+{dynamic_context}
+
+Use these similar past successful interventions as reference for your responses.
+</memory_context>"""
+            
+            # Send as a text message that provides context
+            # This will be processed and influence the model's understanding
+            await self._session.send_client_content(
+                turns=[
+                    types.Content(
+                        role="user",
+                        parts=[types.Part(text=context_message)],
+                    )
+                ],
+                turn_complete=True,  # Complete turn so context is processed
+            )
+            
+            print(f"📚 Injected dynamic context based on conversation pattern")
+            
+        except Exception as e:
+            print(f"Warning: Could not inject dynamic context: {e}")
 
     def _build_system_instruction(self) -> str:
         """Build the system instruction with personalized context."""
@@ -136,9 +253,12 @@ class GeminiLiveClient:
             loaded_prompt = self._load_agent_prompt("main_agent")
             base_instruction = loaded_prompt if loaded_prompt else self._get_default_instruction()
 
-        # Add personalized context from memory (loaded during connect)
+        # Add static personalized context from memory (loaded during connect)
         if self._memory_context:
             base_instruction = f"{base_instruction}\n\n---\nPERSONALIZED CONTEXT FROM MEMORY:\n{self._memory_context}\n---"
+
+        # Note: Dynamic context is injected per-message in send_text() since system instruction
+        # is set once during connect(). This allows real-time context injection based on user messages.
 
         # Add personalized context from conversation context
         personalized = self.context.get_personalized_context()
@@ -444,11 +564,25 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         if self._agent_bridge:
             self._agent_bridge.set_last_user_message(text)
 
+        # Load dynamic context based on current user message
+        await self._load_dynamic_context(text)
+
+        # Build message with dynamic context if available
+        message_text = text
+        if self._dynamic_context_cache:
+            # Inject dynamic context as additional context for the agent
+            # Format it clearly so the model understands it's reference material
+            message_text = f"""Additional context from similar past successful interventions:
+{self._dynamic_context_cache}
+
+---
+User message: {text}"""
+
         await self._session.send_client_content(
             turns=[
                 types.Content(
                     role="user",
-                    parts=[types.Part(text=text)],
+                    parts=[types.Part(text=message_text)],
                 )
             ],
             turn_complete=True,
@@ -488,10 +622,20 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                                 if self._on_text:
                                     self._on_text(part.text)
                                 self.context.add_assistant_message(part.text)
+                                self._last_assistant_response = part.text
+                                
+                                # After assistant responds, prepare and inject dynamic context for next turn
+                                # This works for audio streams by inferring user intent from conversation
+                                if self.memory and self._turn_count > 0:
+                                    # Prepare context asynchronously (non-blocking)
+                                    asyncio.create_task(self._prepare_and_inject_dynamic_context())
+                                
                                 yield {"type": "text", "data": part.text}
 
                     # Turn complete
                     if content.turn_complete:
+                        self._turn_count += 1
+                        
                         if self._on_turn_complete:
                             self._on_turn_complete()
                         yield {"type": "turn_complete", "data": None}

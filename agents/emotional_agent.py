@@ -7,7 +7,7 @@ from google.adk.tools import FunctionTool
 
 def _load_prompt(name: str) -> str:
     """Load a prompt from the config/prompts directory."""
-    prompt_path = Path(__file__).parent.parent / "config" / "prompts" / f"{name}.txt"
+    prompt_path = Path(__file__).parent.parent / "config" / "prompts" / f"{name}.md"
     if prompt_path.exists():
         return prompt_path.read_text()
     return ""
