@@ -6,6 +6,7 @@ import signal
 import time
 from typing import Optional
 
+import weave
 from dotenv import load_dotenv
 
 from voice.gemini_live import GeminiLiveClient, GeminiLiveConfig
@@ -56,6 +57,7 @@ class VoiceBot:
         self._turns_completed = 0
         self._last_response_at = 0.0
 
+    @weave.op
     async def start(self):
         """Start the voice bot."""
         print("Starting voice bot...")
@@ -88,6 +90,7 @@ class VoiceBot:
         if self._on_status_cb:
             self._on_status_cb("ready")
 
+    @weave.op
     async def stop(self):
         """Stop the voice bot."""
         print("\nStopping voice bot...")
@@ -133,6 +136,7 @@ class VoiceBot:
             if self._turns_completed >= self.max_turns:
                 self._is_running = False
 
+    @weave.op
     async def run(self):
         """Main run loop."""
         await self.start()
@@ -185,6 +189,7 @@ class VoiceBot:
                 self._on_error_cb(str(e))
 
 
+@weave.op
 async def run_bot(
     session_id: str = "default",
     user_id: str = "user",

@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Callable, Optional
 
+import weave
 from google import genai
 from google.genai import types
 
@@ -213,6 +214,7 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
             }
         ]
 
+    @weave.op
     async def connect(self) -> bool:
         """Connect to Gemini Live API.
 
@@ -252,6 +254,7 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
             print(f"Failed to connect to Gemini Live API: {e}")
             return False
 
+    @weave.op
     async def disconnect(self):
         """Disconnect from Gemini Live API."""
         if self._session_cm:
@@ -266,6 +269,7 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         """Check if connected to Gemini Live API."""
         return self._is_connected
 
+    @weave.op
     async def send_audio(self, audio_data: bytes):
         """Send audio data to Gemini Live API.
 
@@ -283,6 +287,7 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
             )
         )
 
+    @weave.op
     async def send_text(self, text: str):
         """Send text message to Gemini Live API.
 
@@ -365,6 +370,7 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                             function_responses=[types.FunctionResponse(**response_kwargs)]
                         )
 
+    @weave.op
     async def _handle_tool_call(self, name: str, args: dict) -> str:
         """Handle a tool call from the model.
 
