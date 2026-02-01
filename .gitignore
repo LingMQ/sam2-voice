@@ -41,3 +41,21 @@ frontend/out/
 .vscode/
 
 sessions/
+
+# Planning and analysis documentation (keep local only)
+DETAILED_EXECUTION_PLAN.md
+EXECUTION_CHECKLIST.md
+IMPLEMENTATION_SUMMARY.md
+PRODUCTION_READINESS_SUMMARY.md
+PRODUCTION_REVIEW.md
+QUICK_START_IMPLEMENTATION.md
+REPOSITORY_STATE.md
+TECHNICAL_REFERENCE.md
+TESTING_GUIDE.md
+VIEW_MEMORY_DATA.md
+WEAVE_REDIS_ANALYSIS.md
+AGENT_ARCHITECTURE.md
+PROMPT_FORMAT_ANALYSIS.md
+competitive_analysis.md
+implementation_plan.md
+initialplan.md
