@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+import weave
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, JSONResponse
@@ -16,6 +17,15 @@ from memory.health import MemoryHealthCheck
 from memory.debug import MemoryDebugger
 
 load_dotenv()
+
+# Initialize Weave for observability
+try:
+    project = os.getenv("WEAVE_PROJECT", "sam2-voice")
+    weave.init(project)
+    print(f"Weave initialized: {project}")
+except Exception as e:
+    print(f"Weave initialization skipped: {e}")
+
 app = FastAPI()
 static_dir = Path(__file__).parent / "static"
 frontend_out = Path(__file__).resolve().parents[1] / "frontend" / "out"

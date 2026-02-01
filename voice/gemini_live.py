@@ -411,7 +411,6 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         """Check if connected to Gemini Live API."""
         return self._is_connected
 
-    @weave.op
     async def send_audio(self, audio_data: bytes):
         """Send audio data to Gemini Live API.
 
@@ -508,6 +507,7 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                         if self.memory and self._agent_bridge:
                             # The agent bridge will handle recording
                             pass
+                        yield {"type": "tool_call", "name": fc.name, "args": fc.args, "result": result}
 
                         # Send tool response back
                         response_kwargs = {
@@ -574,6 +574,8 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
             return "Prompting sensory check: noise, light, or body?"
 
         return f"Unknown tool: {name}"
+        # Route to AgentToolBridge (always set in __init__)
+        return self._on_tool_call(name, args)
 
     def get_session_summary(self) -> dict:
         """Get summary of the current session."""

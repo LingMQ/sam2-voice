@@ -218,6 +218,20 @@
 
     async function startRecording() {
       try {
+        // Check for secure context (HTTPS or localhost)
+        if (!window.isSecureContext) {
+          throw new Error('Microphone requires HTTPS. Please use https:// or localhost.');
+        }
+
+        // Check for mediaDevices API
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          // Try legacy API as fallback
+          const getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+          if (!getUserMedia) {
+            throw new Error('Your browser does not support microphone access. Please use Chrome, Firefox, or Edge.');
+          }
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             sampleRate: 16000,
@@ -349,6 +363,19 @@
 
     // Start connection
     connect();
+
+    // Check microphone availability on page load
+    (function checkMicrophoneSupport() {
+      if (!window.isSecureContext) {
+        statusText.textContent = 'Error: HTTPS required for microphone';
+        addMessage('assistant', 'Microphone access requires HTTPS. Please access this page via https:// or http://localhost:8000');
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        statusText.textContent = 'Error: Browser not supported';
+        addMessage('assistant', 'Your browser does not support microphone access. Please use Chrome, Firefox, or Edge.');
+      }
+    })();
   </script>
 </body>
 </html>
