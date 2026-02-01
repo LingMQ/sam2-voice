@@ -1,6 +1,6 @@
 # Sam2 Voice
 
-Voice assistant for ADHD/Autism support using Gemini Live API with ADK agent orchestration.
+Voice assistant for ADHD/Autism support using Gemini Live API with ADK agent orchestration and self-improving memory system.
 
 ## System Architecture
 
@@ -20,17 +20,23 @@ Voice assistant for ADHD/Autism support using Gemini Live API with ADK agent orc
 │  │                    GeminiLiveClient                         ││
 │  │  ┌─────────────────┐    ┌────────────────────────────────┐  ││
 │  │  │ System Prompt   │    │      AgentToolBridge           │  ││
-│  │  │ (main_agent.txt)│    │  ┌──────────────────────────┐  │  ││
-│  │  │                 │    │  │ 13 Tools:                │  │  ││
-│  │  │ ADHD/Autism     │    │  │ • create_microsteps      │  │  ││
-│  │  │ guidance        │    │  │ • mark_step_complete     │  │  ││
-│  │  └─────────────────┘    │  │ • start_breathing_exercise│ │  ││
-│  │                         │  │ • reframe_thought        │  │  ││
+│  │  │ + Memory Context│    │  ┌──────────────────────────┐  │  ││
+│  │  │ + Dynamic Context│   │  │ 13 Tools:                │  │  ││
+│  │  │                 │    │  │ • create_microsteps      │  │  ││
+│  │  │ ADHD/Autism     │    │  │ • mark_step_complete     │  │  ││
+│  │  │ guidance        │    │  │ • start_breathing_exercise│ │  ││
+│  │  └─────────────────┘    │  │ • reframe_thought        │  │  ││
 │  │                         │  │ • grounding_exercise     │  │  ││
 │  │                         │  │ • schedule_checkin       │  │  ││
 │  │                         │  │ • ... (7 more)           │  │  ││
 │  │                         │  └──────────────────────────┘  │  ││
 │  │                         └────────────────────────────────┘  ││
+│  │  ┌──────────────────────────────────────────────────────┐  ││
+│  │  │         Redis Memory System (Vector Search)          │  ││
+│  │  │  • Stores interventions with embeddings              │  ││
+│  │  │  • Finds similar past interventions                 │  ││
+│  │  │  • Injects context for self-improvement             │  ││
+│  │  └──────────────────────────────────────────────────────┘  ││
 │  └─────────────────────────────────────────────────────────────┘│
 └────────────────────────────┬────────────────────────────────────┘
                              │
@@ -55,7 +61,9 @@ pip install -e .
 
 ```bash
 cp .env.example .env
-# Edit .env and add: GOOGLE_API_KEY=your-key-from-aistudio.google.com
+# Edit .env and add:
+# GOOGLE_API_KEY=your-key-from-aistudio.google.com
+# REDIS_URL=redis://default:password@host:port  # Optional: for memory system
 ```
 
 ### 3. Run
@@ -99,8 +107,18 @@ sam2-voice/
 │   ├── emotional_agent.py     # Emotional support
 │   ├── feedback_loop_agent.py # Check-ins & reinforcement
 │   └── ...
+├── memory/
+│   ├── redis_memory.py        # Redis memory with vector search
+│   ├── embeddings.py         # Embedding generation
+│   ├── reflection.py          # Session reflection
+│   ├── health.py              # Health checks
+│   └── ...
+├── tests/
+│   ├── test_memory_system.py  # Memory system tests
+│   ├── test_dynamic_context.py # Dynamic context tests
+│   └── ...
 └── config/prompts/
-    └── main_agent.txt         # System prompt for Gemini
+    └── main_agent.md          # System prompt for Gemini
 ```
 
 ## Available Tools (13)
@@ -110,3 +128,35 @@ sam2-voice/
 | **Task** | `create_microsteps`, `get_current_step`, `mark_step_complete`, `create_reminder`, `get_current_time` |
 | **Emotional** | `start_breathing_exercise`, `sensory_check`, `grounding_exercise`, `suggest_break`, `reframe_thought` |
 | **Feedback** | `schedule_checkin`, `get_time_since_last_checkin`, `log_micro_win` |
+
+## Self-Improving Memory System
+
+The voice assistant includes a Redis-backed memory system that learns from past interactions:
+
+- **Vector Search**: Finds similar past interventions using semantic similarity
+- **Dynamic Context Injection**: Automatically injects relevant past successes into conversations
+- **Session Reflections**: Generates insights at end of each session
+- **Self-Improvement**: Gets better over time by learning what works for each user
+
+### Memory Features
+
+- ✅ Stores interventions with embeddings (30-day TTL)
+- ✅ Semantic similarity search for finding relevant past interactions
+- ✅ Dynamic context injection for both audio and text interfaces
+- ✅ End-of-session reflection generation
+- ✅ User-specific memory and personalization
+- ✅ Production-ready with health checks, logging, and error handling
+
+### Testing
+
+```bash
+# Test memory system
+pytest tests/test_memory_system.py -v
+
+# Test dynamic context injection
+pytest tests/test_dynamic_context.py -v
+python tests/test_dynamic_context_audio.py
+
+# Health check
+python scripts/health_check.py <user_id>
+```
