@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from voice.gemini_live import GeminiLiveClient, GeminiLiveConfig
 from voice.audio import AudioCapture, AudioPlayback, VoiceActivityDetector
+from observability.session_tracker import SessionTracker
 
 
 class VoiceBot:
@@ -45,6 +46,9 @@ class VoiceBot:
             session_id=session_id,
             user_id=user_id,
         )
+
+        # Session tracker for Weave observability
+        self.session_tracker = SessionTracker(session_id=session_id, user_id=user_id)
 
         # Audio components
         self.audio_capture: Optional[AudioCapture] = None
@@ -105,9 +109,18 @@ class VoiceBot:
 
         await self.client.disconnect()
 
-        # Print session summary
+        # Log session summary to Weave
+        weave_summary = self.session_tracker.log_session_summary()
+        effectiveness = self.session_tracker.get_effectiveness_score()
+        print(f"\n📊 Session Summary:")
+        print(f"   Duration: {weave_summary['duration_minutes']:.1f} minutes")
+        print(f"   Tool calls: {weave_summary['total_tool_calls']}")
+        print(f"   Steps completed: {weave_summary['steps_completed']}")
+        print(f"   Tasks completed: {weave_summary['tasks_completed']}")
+        print(f"   Effectiveness: {effectiveness:.0%}")
+
+        # Also print basic session summary
         summary = self.client.get_session_summary()
-        print(f"\nSession summary: {summary}")
         if self._on_status_cb:
             self._on_status_cb("stopped")
 
@@ -181,6 +194,12 @@ class VoiceBot:
             async for response in self.client.receive_responses():
                 if response["type"] == "tool_call":
                     print(f"Tool called: {response['name']} -> {response['result']}")
+                    # Record tool call for session tracking
+                    self.session_tracker.record_tool_call(
+                        tool_name=response['name'],
+                        args=response.get('args', {}),
+                        result=response['result'],
+                    )
         except asyncio.CancelledError:
             pass
         except Exception as e:

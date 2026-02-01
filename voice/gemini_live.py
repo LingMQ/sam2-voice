@@ -389,7 +389,6 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         """Check if connected to Gemini Live API."""
         return self._is_connected
 
-    @weave.op
     async def send_audio(self, audio_data: bytes):
         """Send audio data to Gemini Live API.
 
@@ -476,7 +475,7 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                     tool_call = response.tool_call
                     for fc in tool_call.function_calls:
                         result = await self._handle_tool_call(fc.name, fc.args)
-                        yield {"type": "tool_call", "name": fc.name, "result": result}
+                        yield {"type": "tool_call", "name": fc.name, "args": fc.args, "result": result}
 
                         # Send tool response back
                         response_kwargs = {
