@@ -28,7 +28,6 @@ except Exception as e:
 
 app = FastAPI()
 static_dir = Path(__file__).parent / "static"
-frontend_out = Path(__file__).resolve().parents[1] / "frontend" / "out"
 
 # Always mount static for browser_audio.html
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

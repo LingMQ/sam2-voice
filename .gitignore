@@ -30,10 +30,7 @@ htmlcov/
 logs/
 *.log
 
-# Node / Next.js
-frontend/node_modules/
-frontend/.next/
-frontend/out/
+# Node / Next.js (removed - using HTML frontend only)
 
 # OS / editor
 .DS_Store
