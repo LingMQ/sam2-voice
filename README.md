@@ -100,6 +100,50 @@ Options:
   --user-id ID        User identifier (default: "user")
 ```
 
+## Evaluation
+
+The project includes a Weave-based evaluation system to measure response quality.
+
+### Run Evaluation
+
+```bash
+# Run full evaluation (15 test cases)
+python -m eval.run_eval
+
+# Run specific category
+python -m eval.run_eval --category emotional
+
+# Use a different model
+python -m eval.run_eval --model gemini-2.0-flash
+
+# Custom evaluation name
+python -m eval.run_eval --name my-eval-run
+```
+
+### Evaluation Categories
+
+| Category | Description |
+|----------|-------------|
+| `task_breakdown` | Tests microstep creation for complex tasks |
+| `progress` | Tests completion tracking and win logging |
+| `emotional` | Tests breathing exercises and sensory support |
+| `checkin` | Tests reminder scheduling |
+| `general` | Tests general supportive responses |
+| `onboarding` | Tests new user scenarios |
+
+### Scorers
+
+The evaluation measures three dimensions:
+
+- **Brevity** (30%) - Responses should be 1-2 sentences for voice
+- **Supportiveness** (40%) - Positive, non-judgmental language
+- **Tool Usage** (30%) - Correct tool selection for scenarios
+
+### View Results
+
+Results are logged to Weights & Biases Weave:
+https://wandb.ai/lingmiaojiayou-/hackathon
+
 ## Architecture
 
 ```

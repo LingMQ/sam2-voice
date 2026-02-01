@@ -30,13 +30,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
 web = ["fastapi", "uvicorn[standard]"]
+eval = ["pandas"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["voice*", "agents*", "state*", "utils*"]
+include = ["voice*", "agents*", "state*", "utils*", "eval*"]
 exclude = ["config*", "data*", "tests*"]
 
 [tool.setuptools.package-data]

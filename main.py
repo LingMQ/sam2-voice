@@ -12,9 +12,9 @@ Usage:
 import argparse
 import asyncio
 
+import weave
 from dotenv import load_dotenv
-
-from voice.bot import run_bot, main as bot_main
+from voice.bot import main as bot_main, run_bot
 
 
 def parse_args():
@@ -27,20 +27,15 @@ def parse_args():
         type=str,
         default="Puck",
         choices=["Puck", "Charon", "Kore", "Fenrir", "Aoede"],
-        help="Gemini voice to use (default: Puck)"
+        help="Gemini voice to use (default: Puck)",
     )
     parser.add_argument(
         "--session-id",
         type=str,
         default="default",
-        help="Session identifier for state management"
+        help="Session identifier for state management",
     )
-    parser.add_argument(
-        "--user-id",
-        type=str,
-        default="user",
-        help="User identifier"
-    )
+    parser.add_argument("--user-id", type=str, default="user", help="User identifier")
     parser.add_argument(
         "--max-turns",
         type=int,
@@ -53,6 +48,10 @@ def parse_args():
 async def main():
     """Main entry point with argument parsing."""
     load_dotenv()
+
+    # Initialize Weave for observability
+    weave.init('lingmiaojiayou-/hackathon')
+
     args = parse_args()
 
     await run_bot(
