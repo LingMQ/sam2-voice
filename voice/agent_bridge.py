@@ -1,6 +1,8 @@
 """Bridge between Gemini Live tools and ADK agent tool implementations."""
 
-from typing import Callable, Dict, Any
+import os
+import asyncio
+from typing import Callable, Dict, Any, Optional
 
 import weave
 
@@ -14,6 +16,8 @@ from agents.feedback_loop_agent import (
 )
 
 from datetime import datetime, timedelta
+from memory.redis_memory import RedisUserMemory
+from memory.embeddings import get_embedding
 
 
 class AgentToolBridge:
@@ -23,15 +27,62 @@ class AgentToolBridge:
     as the ADK agents, ensuring consistent behavior and shared state.
     """
 
-    def __init__(self, session_id: str = "default", user_id: str = "user"):
+    def __init__(self, session_id: str = "default", user_id: str = "user", memory: Optional[RedisUserMemory] = None):
         """Initialize the bridge with session context.
 
         Args:
             session_id: Session identifier for tool state
             user_id: User identifier
+            memory: Optional RedisUserMemory instance for tracking interventions
         """
         self.session_id = session_id
         self.user_id = user_id
+        self.memory = memory
+        self._last_user_message: Optional[str] = None  # Track last user message for context
+
+    async def _record_intervention_async(
+        self,
+        tool_name: str,
+        args: dict,
+        result: str,
+        outcome: str
+    ):
+        """Record intervention in memory asynchronously.
+        
+        Args:
+            tool_name: Name of tool called
+            args: Tool arguments
+            result: Tool result
+            outcome: Outcome classification
+        """
+        if not self.memory:
+            return
+        
+        try:
+            # Build context from last user message or tool call
+            context = self._last_user_message or f"User requested {tool_name}"
+            
+            # Build intervention text from tool name and result
+            intervention_text = f"Used {tool_name}: {result}"
+            
+            # Get current task if available
+            task = "general"
+            if self.session_id in _current_tasks:
+                task = _current_tasks[self.session_id].get("task", "general")
+            
+            # Get embedding of context
+            embedding = await get_embedding(context)
+            
+            # Record intervention
+            await self.memory.record_intervention(
+                intervention_text=intervention_text,
+                context=context,
+                task=task,
+                outcome=outcome,
+                embedding=embedding
+            )
+        except Exception as e:
+            print(f"Warning: Could not record intervention: {e}")
 
     @weave.op
     def handle_tool_call(self, name: str, args: dict) -> str:
@@ -44,6 +95,10 @@ class AgentToolBridge:
         Returns:
             Tool result string
         """
+
+        # Determine outcome and record intervention
+        outcome = "intervention_applied"  # Default
+        
         # Add metadata for filtering in Weave dashboard
         weave.attributes({
             "user_id": self.user_id,
@@ -51,42 +106,94 @@ class AgentToolBridge:
             "tool_name": name,
             "tool_category": self._get_tool_category(name),
         })
+
         # Task agent tools
         if name == "create_microsteps":
-            return self._create_microsteps(args)
+            result = self._create_microsteps(args)
+            outcome = "task_started"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         elif name == "get_current_step":
             return self._get_current_step(args)
         elif name == "mark_step_complete":
-            return self._mark_step_complete(args)
+            result = self._mark_step_complete(args)
+            outcome = "task_progress"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         elif name == "get_current_time":
             return self._get_current_time(args)
         elif name == "create_reminder":
-            return self._create_reminder(args)
+            result = self._create_reminder(args)
+            outcome = "task_started"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
 
         # Feedback loop agent tools
         elif name == "schedule_checkin":
-            return self._schedule_checkin(args)
+            result = self._schedule_checkin(args)
+            outcome = "re_engaged"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         elif name == "get_time_since_last_checkin":
             return self._get_time_since_last_checkin(args)
         elif name == "log_micro_win":
-            return self._log_micro_win(args)
+            result = self._log_micro_win(args)
+            outcome = "task_completed"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         # Keep log_win as alias for backwards compatibility
         elif name == "log_win":
-            return self._log_micro_win({"description": args.get("description", "")})
+            result = self._log_micro_win({"description": args.get("description", "")})
+            outcome = "task_completed"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
 
         # Emotional agent tools
         elif name == "start_breathing_exercise":
-            return self._start_breathing_exercise(args)
+            result = self._start_breathing_exercise(args)
+            outcome = "re_engaged"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         elif name == "sensory_check":
-            return self._sensory_check(args)
+            result = self._sensory_check(args)
+            outcome = "re_engaged"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         elif name == "grounding_exercise":
-            return self._grounding_exercise(args)
+            result = self._grounding_exercise(args)
+            outcome = "re_engaged"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         elif name == "suggest_break":
-            return self._suggest_break(args)
+            result = self._suggest_break(args)
+            outcome = "re_engaged"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
         elif name == "reframe_thought":
-            return self._reframe_thought(args)
+            result = self._reframe_thought(args)
+            outcome = "re_engaged"
+            self._record_intervention_in_background(name, args, result, outcome)
+            return result
 
         return f"Unknown tool: {name}"
+    
+    def _record_intervention_in_background(self, name: str, args: dict, result: str, outcome: str):
+        """Record intervention in background without blocking."""
+        if self.memory:
+            # Spawn async task to record intervention
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(
+                        self._record_intervention_async(name, args, result, outcome)
+                    )
+                else:
+                    loop.run_until_complete(
+                        self._record_intervention_async(name, args, result, outcome)
+                    )
+            except RuntimeError:
+                # No event loop, create new one
+                asyncio.run(self._record_intervention_async(name, args, result, outcome))
 
     # ==================== Task Agent Tools ====================
 
@@ -133,6 +240,10 @@ class AgentToolBridge:
             return f"All done! Completed all {total} steps for: {task_name}"
 
         return f"Step {step} complete! {total - step} steps remaining."
+    
+    def set_last_user_message(self, message: str):
+        """Set the last user message for context when recording interventions."""
+        self._last_user_message = message
 
     def _get_current_time(self, args: dict) -> str:
         """Get the current time for time-awareness."""

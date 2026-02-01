@@ -21,6 +21,10 @@ dependencies = [
     # Observability
     "weave",                          # W&B Weave
 
+    # Memory (Redis - vector search)
+    "redis[hiredis]>=5.0.0",         # Redis client with fast C parser
+    "numpy>=1.24.0",                  # For vector operations (already listed, but needed for memory)
+
     # Utilities
     "python-dotenv",
     "pyyaml",
@@ -28,7 +32,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",  # Coverage reporting
+]
 web = ["fastapi", "uvicorn[standard]"]
 eval = ["pandas"]
 

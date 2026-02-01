@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory System Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #eee;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin-bottom: 1rem; }
+    .subtitle { color: #888; margin-bottom: 2rem; }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .card h2 {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      color: #4ade80;
+    }
+    
+    .status {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    
+    .status.healthy { background: #4ade80; color: #000; }
+    .status.degraded { background: #fbbf24; color: #000; }
+    .status.unhealthy { background: #f87171; color: #fff; }
+    
+    button {
+      background: #4ade80;
+      color: #000;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    button:hover {
+      background: #22c55e;
+      transform: translateY(-2px);
+    }
+    
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .data-display {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.85rem;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .metric:last-child {
+      border-bottom: none;
+    }
+    
+    .metric-label {
+      color: #888;
+    }
+    
+    .metric-value {
+      font-weight: 600;
+      color: #4ade80;
+    }
+    
+    .loading {
+      color: #888;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧠 Memory System Test Interface</h1>
+    <p class="subtitle">Test and monitor the Redis memory system</p>
+    
+    <div class="grid">
+      <!-- Health Check Card -->
+      <div class="card">
+        <h2>Health Check</h2>
+        <div id="healthStatus" class="status">Checking...</div>
+        <button onclick="checkHealth()">Refresh Health</button>
+        <div id="healthDetails" class="data-display" style="display: none;"></div>
+      </div>
+      
+      <!-- Memory Stats Card -->
+      <div class="card">
+        <h2>Memory Statistics</h2>
+        <button onclick="getStats()">Get Stats</button>
+        <div id="statsDisplay" class="data-display" style="display: none;"></div>
+      </div>
+      
+      <!-- Debug Info Card -->
+      <div class="card">
+        <h2>Debug Information</h2>
+        <button onclick="getDebugInfo()">Get Debug Info</button>
+        <div id="debugDisplay" class="data-display" style="display: none;"></div>
+      </div>
+      
+      <!-- Interventions Card -->
+      <div class="card">
+        <h2>Stored Interventions</h2>
+        <button onclick="getInterventions()">View Interventions</button>
+        <div id="interventionsDisplay" class="data-display" style="display: none;"></div>
+      </div>
+      
+      <!-- Reflections Card -->
+      <div class="card">
+        <h2>Session Reflections</h2>
+        <button onclick="getReflections()">View Reflections</button>
+        <div id="reflectionsDisplay" class="data-display" style="display: none;"></div>
+      </div>
+    </div>
+    
+    <!-- Voice Test Link -->
+    <div class="card" style="margin-top: 2rem;">
+      <h2>Test Voice Bot with Memory</h2>
+      <p style="margin-bottom: 1rem;">Use the voice interface to test memory in action:</p>
+      <a href="/" style="display: inline-block; background: #4ade80; color: #000; padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none; font-weight: 600;">
+        Open Voice Interface →
+      </a>
+    </div>
+  </div>
+
+  <script>
+    async function checkHealth() {
+      const statusEl = document.getElementById('healthStatus');
+      const detailsEl = document.getElementById('healthDetails');
+      
+      statusEl.textContent = 'Checking...';
+      statusEl.className = 'status';
+      detailsEl.style.display = 'none';
+      
+      try {
+        const response = await fetch('/api/health');
+        const data = await response.json();
+        
+        statusEl.textContent = data.overall_status.toUpperCase();
+        statusEl.className = `status ${data.overall_status}`;
+        
+        detailsEl.textContent = JSON.stringify(data, null, 2);
+        detailsEl.style.display = 'block';
+      } catch (error) {
+        statusEl.textContent = 'ERROR';
+        statusEl.className = 'status unhealthy';
+        detailsEl.textContent = `Error: ${error.message}`;
+        detailsEl.style.display = 'block';
+      }
+    }
+    
+    async function getStats() {
+      const displayEl = document.getElementById('statsDisplay');
+      displayEl.textContent = 'Loading...';
+      displayEl.style.display = 'block';
+      
+      try {
+        const response = await fetch('/api/memory/stats');
+        const data = await response.json();
+        
+        if (data.error) {
+          displayEl.textContent = `Error: ${data.error}`;
+        } else {
+          displayEl.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (error) {
+        displayEl.textContent = `Error: ${error.message}`;
+      }
+    }
+    
+    async function getDebugInfo() {
+      const displayEl = document.getElementById('debugDisplay');
+      displayEl.textContent = 'Loading...';
+      displayEl.style.display = 'block';
+      
+      try {
+        const response = await fetch('/api/memory/debug');
+        const data = await response.json();
+        
+        if (data.error) {
+          displayEl.textContent = `Error: ${data.error}`;
+        } else {
+          displayEl.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (error) {
+        displayEl.textContent = `Error: ${error.message}`;
+      }
+    }
+    
+    async function getInterventions() {
+      const displayEl = document.getElementById('interventionsDisplay');
+      displayEl.textContent = 'Loading...';
+      displayEl.style.display = 'block';
+      
+      try {
+        const response = await fetch('/api/memory/interventions');
+        const data = await response.json();
+        
+        if (data.error) {
+          displayEl.textContent = `Error: ${data.error}`;
+        } else {
+          if (data.count === 0) {
+            displayEl.textContent = 'No interventions stored yet.\n\nTry using the voice interface to create some!';
+          } else {
+            let output = `Found ${data.count} interventions:\n\n`;
+            data.interventions.forEach((iv, idx) => {
+              output += `--- Intervention ${idx + 1} ---\n`;
+              output += `Key: ${iv.key}\n`;
+              output += `TTL: ${iv.ttl} seconds (${Math.round(iv.ttl / 86400)} days remaining)\n`;
+              if (iv.data) {
+                output += `Intervention: ${iv.data.intervention || 'N/A'}\n`;
+                output += `Context: ${iv.data.context || 'N/A'}\n`;
+                output += `Task: ${iv.data.task || 'N/A'}\n`;
+                output += `Outcome: ${iv.data.outcome || 'N/A'}\n`;
+                output += `Timestamp: ${new Date(iv.data.timestamp * 1000).toLocaleString()}\n`;
+                output += `Embedding: ${iv.data.embedding ? iv.data.embedding.length + ' dimensions' : 'N/A'}\n`;
+              }
+              output += '\n';
+            });
+            displayEl.textContent = output;
+          }
+        }
+      } catch (error) {
+        displayEl.textContent = `Error: ${error.message}`;
+      }
+    }
+    
+    async function getReflections() {
+      const displayEl = document.getElementById('reflectionsDisplay');
+      displayEl.textContent = 'Loading...';
+      displayEl.style.display = 'block';
+      
+      try {
+        const response = await fetch('/api/memory/reflections');
+        const data = await response.json();
+        
+        if (data.error) {
+          displayEl.textContent = `Error: ${data.error}`;
+        } else {
+          if (data.count === 0) {
+            displayEl.textContent = 'No reflections stored yet.\n\nComplete a voice session to generate reflections!';
+          } else {
+            let output = `Found ${data.count} reflections:\n\n`;
+            data.reflections.forEach((rf, idx) => {
+              output += `--- Reflection ${idx + 1} ---\n`;
+              output += `Key: ${rf.key}\n`;
+              output += `TTL: ${rf.ttl} seconds (${Math.round(rf.ttl / 86400)} days remaining)\n`;
+              if (rf.data) {
+                output += `Insight: ${rf.data.insight || 'N/A'}\n`;
+                output += `Timestamp: ${rf.data.timestamp || 'N/A'}\n`;
+                output += `Summary: ${(rf.data.session_summary || '').substring(0, 200)}...\n`;
+              }
+              output += '\n';
+            });
+            displayEl.textContent = output;
+          }
+        }
+      } catch (error) {
+        displayEl.textContent = `Error: ${error.message}`;
+      }
+    }
+    
+    // Auto-check health on load
+    window.addEventListener('load', () => {
+      checkHealth();
+    });
+  </script>
+</body>
+</html>

@@ -15,6 +15,7 @@ from google.genai import types
 from state.session import SessionState
 from state.context import ConversationContext
 from voice.agent_bridge import AgentToolBridge
+from memory.redis_memory import RedisUserMemory
 
 
 @dataclass
@@ -56,6 +57,7 @@ class GeminiLiveClient:
         config: Optional[GeminiLiveConfig] = None,
         session_id: str = "default",
         user_id: str = "user",
+        memory: Optional[RedisUserMemory] = None,
     ):
         self.config = config or GeminiLiveConfig()
         self.session_id = session_id
@@ -67,6 +69,10 @@ class GeminiLiveClient:
         # State management
         self.session_state = SessionState(session_id=session_id, user_id=user_id)
         self.context = ConversationContext()
+
+        # Memory system
+        self.memory = memory
+        self._memory_context: Optional[str] = None
 
         # Session handle
         self._session = None
@@ -80,7 +86,7 @@ class GeminiLiveClient:
         self._on_turn_complete: Optional[Callable[[], None]] = None
 
         # Agent bridge for ADK tool integration
-        self._agent_bridge = AgentToolBridge(session_id=session_id, user_id=user_id)
+        self._agent_bridge = AgentToolBridge(session_id=session_id, user_id=user_id, memory=memory)
         self.set_tool_callback(self._agent_bridge.handle_tool_call)
 
     def set_audio_callback(self, callback: Callable[[bytes], None]):
@@ -113,6 +119,15 @@ class GeminiLiveClient:
             return prompt_path.read_text()
         return None
 
+    async def _load_memory_context(self):
+        """Load memory context for this user."""
+        if self.memory:
+            try:
+                self._memory_context = await self.memory.get_context_for_prompt()
+            except Exception as e:
+                print(f"Warning: Could not load memory context: {e}")
+                self._memory_context = None
+
     def _build_system_instruction(self) -> str:
         """Build the system instruction with personalized context."""
         # Try to load the rich ADK main agent prompt
@@ -121,10 +136,14 @@ class GeminiLiveClient:
             loaded_prompt = self._load_agent_prompt("main_agent")
             base_instruction = loaded_prompt if loaded_prompt else self._get_default_instruction()
 
-        # Add personalized context from memory
+        # Add personalized context from memory (loaded during connect)
+        if self._memory_context:
+            base_instruction = f"{base_instruction}\n\n---\nPERSONALIZED CONTEXT FROM MEMORY:\n{self._memory_context}\n---"
+
+        # Add personalized context from conversation context
         personalized = self.context.get_personalized_context()
         if personalized:
-            return f"{base_instruction}\n\n---\nPERSONALIZED CONTEXT:\n{personalized}\n---"
+            return f"{base_instruction}\n\n---\nCURRENT SESSION CONTEXT:\n{personalized}\n---"
 
         return base_instruction
 
@@ -338,6 +357,9 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
             True if connection successful
         """
         try:
+            # Load memory context before building system instruction
+            await self._load_memory_context()
+            
             # Build live connect config
             config = types.LiveConnectConfig(
                 response_modalities=self.config.response_modalities,
@@ -417,6 +439,10 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
             return
 
         self.context.add_user_message(text)
+        
+        # Track user message for intervention context
+        if self._agent_bridge:
+            self._agent_bridge.set_last_user_message(text)
 
         await self._session.send_client_content(
             turns=[
@@ -475,6 +501,12 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
                     tool_call = response.tool_call
                     for fc in tool_call.function_calls:
                         result = await self._handle_tool_call(fc.name, fc.args)
+                        yield {"type": "tool_call", "name": fc.name, "result": result}
+                        
+                        # Record intervention in memory if available
+                        if self.memory and self._agent_bridge:
+                            # The agent bridge will handle recording
+                            pass
                         yield {"type": "tool_call", "name": fc.name, "args": fc.args, "result": result}
 
                         # Send tool response back
@@ -500,6 +532,48 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         Returns:
             Tool result string
         """
+        # Use external callback if set (now async)
+        if self._on_tool_call:
+            # Check if callback is async
+            import asyncio
+            import inspect
+            if inspect.iscoroutinefunction(self._on_tool_call):
+                return await self._on_tool_call(name, args)
+            else:
+                return self._on_tool_call(name, args)
+
+        # Default tool implementations
+        if name == "schedule_checkin":
+            minutes = args.get("minutes", 3)
+            return f"Check-in scheduled for {minutes} minutes from now"
+
+        elif name == "create_microsteps":
+            task = args.get("task", "task")
+            count = args.get("count", 3)
+            self.session_state.start_task(task, count)
+            return f"Created {count} micro-steps for: {task}"
+
+        elif name == "mark_step_complete":
+            self.session_state.complete_step()
+            step = self.session_state.current_step
+            total = self.session_state.total_steps
+            if step >= total:
+                return "All steps complete!"
+            return f"Step {step} complete. {total - step} remaining."
+
+        elif name == "log_win":
+            desc = args.get("description", "accomplishment")
+            self.session_state.record_intervention(desc, "task_completed")
+            return f"Win logged: {desc}"
+
+        elif name == "start_breathing_exercise":
+            breaths = args.get("breaths", 3)
+            return f"Starting {breaths}-breath exercise"
+
+        elif name == "sensory_check":
+            return "Prompting sensory check: noise, light, or body?"
+
+        return f"Unknown tool: {name}"
         # Route to AgentToolBridge (always set in __init__)
         return self._on_tool_call(name, args)
 
