@@ -501,42 +501,8 @@ Never be preachy or give long explanations. Quick, supportive responses only."""
         Returns:
             Tool result string
         """
-        # Use external callback if set
-        if self._on_tool_call:
-            return self._on_tool_call(name, args)
-
-        # Default tool implementations
-        if name == "schedule_checkin":
-            minutes = args.get("minutes", 3)
-            return f"Check-in scheduled for {minutes} minutes from now"
-
-        elif name == "create_microsteps":
-            task = args.get("task", "task")
-            count = args.get("count", 3)
-            self.session_state.start_task(task, count)
-            return f"Created {count} micro-steps for: {task}"
-
-        elif name == "mark_step_complete":
-            self.session_state.complete_step()
-            step = self.session_state.current_step
-            total = self.session_state.total_steps
-            if step >= total:
-                return "All steps complete!"
-            return f"Step {step} complete. {total - step} remaining."
-
-        elif name == "log_win":
-            desc = args.get("description", "accomplishment")
-            self.session_state.record_intervention(desc, "task_completed")
-            return f"Win logged: {desc}"
-
-        elif name == "start_breathing_exercise":
-            breaths = args.get("breaths", 3)
-            return f"Starting {breaths}-breath exercise"
-
-        elif name == "sensory_check":
-            return "Prompting sensory check: noise, light, or body?"
-
-        return f"Unknown tool: {name}"
+        # Route to AgentToolBridge (always set in __init__)
+        return self._on_tool_call(name, args)
 
     def get_session_summary(self) -> dict:
         """Get summary of the current session."""
