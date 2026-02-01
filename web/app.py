@@ -36,8 +36,20 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 def index():
-    """Serve the browser audio page."""
+    """Serve the main UI (ADHD/Autism-friendly design)."""
+    return FileResponse(static_dir / "index.html")
+
+
+@app.get("/classic")
+def classic_ui():
+    """Serve the classic browser audio page."""
     return FileResponse(static_dir / "browser_audio.html")
+
+
+@app.get("/calm")
+def calm_ui():
+    """Serve the calm UI (alternate design)."""
+    return FileResponse(static_dir / "calm_ui.html")
 
 
 @app.get("/test")

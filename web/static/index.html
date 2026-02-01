@@ -1,74 +1,1140 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
-    <title>Sam2 Voice</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-  </head>
-  <body>
-    <div class="page">
-      <header class="topbar">
-        <div class="brand">
-          <div class="logo" aria-hidden="true">S2</div>
-          <div class="brand-copy">
-            <span class="brand-title">Sam2 Voice</span>
-            <span class="brand-subtitle">Local conversational agent</span>
-          </div>
-        </div>
-        <div class="status-pill" id="status-pill">
-          <span class="dot" aria-hidden="true"></span>
-          <span id="status">disconnected</span>
-        </div>
-      </header>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1e1b4b" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Sam2 Voice - A calm, supportive voice companion for ADHD and Autism">
+  <title>Sam2 Voice</title>
 
-      <section class="hero">
-        <div class="hero-copy">
-          <h1>Listen, respond, and iterate in real time.</h1>
-          <p class="note">
-            This UI observes the local voice bot (mic/speaker on this machine).
-          </p>
-          <div class="controls">
-            <button id="start">Start session</button>
-            <button id="stop" class="secondary">Stop</button>
-          </div>
-        </div>
-        <div class="hero-card">
-          <div class="metric">
-            <span class="label">Session</span>
-            <span class="value" id="session-state">Idle</span>
-          </div>
-          <div class="metric">
-            <span class="label">Events</span>
-            <span class="value" id="event-count">0</span>
-          </div>
-          <div class="metric">
-            <span class="label">Transcript lines</span>
-            <span class="value" id="transcript-count">0</span>
-          </div>
-        </div>
-      </section>
+  <!-- Preload critical resources -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-      <section class="grid">
-        <div class="panel transcript-panel">
-          <div class="panel-header">
-            <h2>Transcript</h2>
-            <button id="clear-transcript" class="ghost">Clear</button>
-          </div>
-          <pre id="transcript" aria-live="polite"></pre>
+  <style>
+    /* =============================================
+       SAM2 VOICE - ADHD/Autism Friendly UI
+       =============================================
+       Design principles:
+       - Calm, muted colors
+       - Large touch targets (64px buttons)
+       - Clear visual hierarchy
+       - Generous whitespace
+       - Reduced motion support
+       ============================================= */
+
+    :root {
+      /* Primary palette - Calm indigo */
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-soft: #e0e7ff;
+      --primary-glow: rgba(99, 102, 241, 0.15);
+
+      /* Status colors - Muted, calming */
+      --status-ready: #6366f1;
+      --status-listening: #10b981;
+      --status-processing: #f59e0b;
+      --status-paused: #64748b;
+      --status-error: #f87171;
+
+      /* Backgrounds */
+      --bg-base: #f8fafc;
+      --bg-elevated: #ffffff;
+      --bg-subtle: #f1f5f9;
+
+      /* Text */
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --text-inverse: #ffffff;
+
+      /* Borders & Shadows */
+      --border-light: #e2e8f0;
+      --border-medium: #cbd5e1;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+      --shadow-glow: 0 0 0 4px var(--primary-glow);
+
+      /* Spacing */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+
+      /* Typography */
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --text-sm: 0.875rem;
+      --text-base: 1rem;
+      --text-lg: 1.125rem;
+      --text-xl: 1.25rem;
+      --text-2xl: 1.5rem;
+      --text-3xl: 1.875rem;
+
+      /* Borders */
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+      --radius-2xl: 24px;
+      --radius-full: 9999px;
+
+      /* Transitions */
+      --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+      --duration-fast: 150ms;
+      --duration-normal: 250ms;
+      --duration-slow: 350ms;
+    }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-base: #0f172a;
+        --bg-elevated: #1e293b;
+        --bg-subtle: #334155;
+        --text-primary: #f1f5f9;
+        --text-secondary: #cbd5e1;
+        --text-muted: #64748b;
+        --border-light: #334155;
+        --border-medium: #475569;
+        --primary-soft: #312e81;
+        --primary-glow: rgba(99, 102, 241, 0.25);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Reset & Base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* =============================================
+       LAYOUT
+       ============================================= */
+    .app {
+      max-width: 420px;
+      margin: 0 auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-6);
+      padding-bottom: calc(var(--space-12) + env(safe-area-inset-bottom));
+    }
+
+    /* =============================================
+       STATUS BAR
+       ============================================= */
+    .status-bar {
+      display: flex;
+      justify-content: center;
+      padding: var(--space-4) 0;
+      margin-bottom: var(--space-6);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-5);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-full);
+      box-shadow: var(--shadow-sm);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all var(--duration-normal) var(--ease-out);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--status-paused);
+      transition: all var(--duration-normal) var(--ease-out);
+    }
+
+    .status-dot.connecting {
+      background: var(--status-processing);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-dot.ready {
+      background: var(--status-ready);
+    }
+
+    .status-dot.listening {
+      background: var(--status-listening);
+      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+      animation: breathe 2.5s ease-in-out infinite;
+    }
+
+    .status-dot.error {
+      background: var(--status-error);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes breathe {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+      }
+      50% {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.1);
+      }
+    }
+
+    /* =============================================
+       WELCOME SECTION
+       ============================================= */
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: var(--space-8) 0;
+    }
+
+    .welcome-avatar {
+      width: 100px;
+      height: 100px;
+      margin-bottom: var(--space-6);
+      background: linear-gradient(135deg, var(--primary-soft) 0%, #ddd6fe 100%);
+      border-radius: var(--radius-2xl);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .welcome-avatar::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.4) 100%);
+    }
+
+    .welcome-avatar-icon {
+      font-size: 48px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .welcome h1 {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: var(--space-3);
+      letter-spacing: -0.02em;
+    }
+
+    .welcome-subtitle {
+      font-size: var(--text-lg);
+      color: var(--text-secondary);
+      max-width: 300px;
+      margin: 0 auto var(--space-8);
+      line-height: 1.5;
+    }
+
+    /* =============================================
+       BUTTONS
+       ============================================= */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-4);
+      border: none;
+      border-radius: var(--radius-lg);
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: var(--shadow-glow), 0 0 0 2px var(--primary);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-primary {
+      min-width: 200px;
+      height: 60px;
+      padding: 0 var(--space-10);
+      background: var(--primary);
+      color: var(--text-inverse);
+      font-size: var(--text-lg);
+      letter-spacing: 0.01em;
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(0) scale(0.98);
+    }
+
+    .btn-secondary {
+      width: 100%;
+      height: 56px;
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-size: var(--text-base);
+      border: 2px solid var(--border-light);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--bg-subtle);
+      border-color: var(--border-medium);
+    }
+
+    .btn-ghost {
+      height: 40px;
+      padding: 0 var(--space-4);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: var(--text-sm);
+      font-weight: 500;
+    }
+
+    .btn-ghost:hover {
+      color: var(--text-secondary);
+      background: var(--bg-subtle);
+    }
+
+    .btn-icon {
+      width: 24px;
+      height: 24px;
+      stroke-width: 2;
+    }
+
+    /* =============================================
+       SUGGESTIONS
+       ============================================= */
+    .suggestions {
+      width: 100%;
+      margin-top: var(--space-8);
+    }
+
+    .suggestions-label {
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: var(--space-3);
+      text-align: center;
+    }
+
+    .suggestion-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      justify-content: center;
+    }
+
+    .suggestion-chip {
+      padding: var(--space-3) var(--space-4);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-full);
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .suggestion-chip:hover {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* =============================================
+       CONVERSATION
+       ============================================= */
+    .conversation {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .conversation-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) 0;
+      margin-bottom: var(--space-3);
+    }
+
+    .conversation-title {
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-4);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-xl);
+      min-height: 250px;
+      max-height: 400px;
+    }
+
+    .message {
+      max-width: 85%;
+      padding: var(--space-4) var(--space-5);
+      border-radius: var(--radius-xl);
+      margin-bottom: var(--space-3);
+      animation: messageIn var(--duration-normal) var(--ease-out);
+    }
+
+    @keyframes messageIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-assistant {
+      background: linear-gradient(135deg, var(--primary-soft) 0%, #ede9fe 100%);
+      border-left: 4px solid var(--primary);
+      margin-right: auto;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .message-assistant {
+        background: linear-gradient(135deg, #312e81 0%, #3730a3 100%);
+      }
+    }
+
+    .message-tool {
+      background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+      border-left: 4px solid var(--status-listening);
+      margin-right: auto;
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-weight: 500;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .message-tool {
+        background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+        color: #a7f3d0;
+      }
+    }
+
+    .message-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: var(--space-1);
+    }
+
+    .message-content {
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--text-primary);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: var(--space-12) var(--space-6);
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 56px;
+      margin-bottom: var(--space-4);
+      opacity: 0.6;
+    }
+
+    .empty-state-text {
+      font-size: var(--text-base);
+      line-height: 1.5;
+    }
+
+    /* Audio level indicator */
+    .audio-indicator {
+      margin-top: var(--space-3);
+      height: 6px;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+
+    .audio-level {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--status-listening), #34d399);
+      border-radius: var(--radius-full);
+      transition: width 80ms ease-out;
+    }
+
+    /* =============================================
+       ACTION BAR
+       ============================================= */
+    .action-bar {
+      padding-top: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    /* =============================================
+       TOAST NOTIFICATIONS
+       ============================================= */
+    .toast-container {
+      position: fixed;
+      bottom: calc(140px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      font-weight: 500;
+      pointer-events: auto;
+      animation: toastIn var(--duration-normal) var(--ease-out);
+    }
+
+    .toast-success {
+      border-left: 4px solid var(--status-listening);
+    }
+
+    .toast-icon {
+      font-size: 20px;
+    }
+
+    .toast.hiding {
+      animation: toastOut var(--duration-normal) var(--ease-out) forwards;
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes toastOut {
+      from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.95);
+      }
+    }
+
+    /* =============================================
+       ERROR STATE
+       ============================================= */
+    .error-banner {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
+      text-align: center;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .error-banner {
+        background: #450a0a;
+        border-color: #7f1d1d;
+      }
+    }
+
+    .error-banner h3 {
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--status-error);
+      margin-bottom: var(--space-2);
+    }
+
+    .error-banner p {
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+      margin-bottom: var(--space-4);
+    }
+
+    /* =============================================
+       UTILITIES
+       ============================================= */
+    .hidden {
+      display: none !important;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Scrollbar styling */
+    .messages-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .messages-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .messages-container::-webkit-scrollbar-thumb {
+      background: var(--border-medium);
+      border-radius: var(--radius-full);
+    }
+
+    .messages-container::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Status Bar -->
+    <header class="status-bar">
+      <div class="status-pill" role="status" aria-live="polite">
+        <span class="status-dot" id="statusDot" aria-hidden="true"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </header>
+
+    <!-- Welcome Section -->
+    <main class="welcome" id="welcomeSection">
+      <div class="welcome-avatar">
+        <span class="welcome-avatar-icon" aria-hidden="true">🎧</span>
+      </div>
+
+      <h1>Hi, I'm Sam</h1>
+      <p class="welcome-subtitle">
+        I'm here to help you stay focused, break down tasks, and feel calmer.
+      </p>
+
+      <div class="action-bar">
+        <button class="btn btn-primary" id="startBtn" disabled aria-describedby="startHint">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+          Start Talking
+        </button>
+        <span id="startHint" class="sr-only">Press to begin voice conversation</span>
+      </div>
+
+      <div class="suggestions">
+        <p class="suggestions-label">Try saying</p>
+        <div class="suggestion-list" role="list">
+          <span class="suggestion-chip" role="listitem">Help me get started</span>
+          <span class="suggestion-chip" role="listitem">I feel overwhelmed</span>
+          <span class="suggestion-chip" role="listitem">Break this into steps</span>
         </div>
-        <div class="panel events-panel">
-          <div class="panel-header">
-            <h2>Events</h2>
-            <button id="clear-events" class="ghost">Clear</button>
-          </div>
-          <pre id="events"></pre>
+      </div>
+    </main>
+
+    <!-- Conversation Section -->
+    <section class="conversation hidden" id="conversationSection" aria-label="Conversation">
+      <div class="conversation-header">
+        <h2 class="conversation-title">Conversation</h2>
+        <button class="btn btn-ghost" id="clearBtn" aria-label="Clear conversation">
+          Clear
+        </button>
+      </div>
+
+      <div class="messages-container" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-state-icon" aria-hidden="true">💬</div>
+          <p class="empty-state-text">Start speaking and<br>I'll respond here</p>
         </div>
-      </section>
+      </div>
+
+      <div class="audio-indicator" aria-hidden="true">
+        <div class="audio-level" id="audioLevel"></div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn btn-secondary" id="pauseBtn">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <rect x="6" y="4" width="4" height="16" rx="1"/>
+            <rect x="14" y="4" width="4" height="16" rx="1"/>
+          </svg>
+          Take a Break
+        </button>
+      </div>
+    </section>
+
+    <!-- Paused Section -->
+    <section class="welcome hidden" id="pausedSection">
+      <div class="welcome-avatar">
+        <span class="welcome-avatar-icon" aria-hidden="true">☕</span>
+      </div>
+
+      <h1>Taking a break</h1>
+      <p class="welcome-subtitle">
+        I'll be here when you're ready to continue.
+      </p>
+
+      <div class="action-bar">
+        <button class="btn btn-primary" id="resumeBtn">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>
+          </svg>
+          Resume
+        </button>
+      </div>
+    </section>
+
+    <!-- Error Banner -->
+    <div class="error-banner hidden" id="errorBanner" role="alert">
+      <h3>Connection Issue</h3>
+      <p id="errorMessage">Having trouble connecting. Let's try again.</p>
+      <button class="btn btn-primary" id="retryBtn">Try Again</button>
     </div>
-    <script src="/static/app.js"></script>
-  </body>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+  </div>
+
+  <script>
+    // =============================================
+    // DOM ELEMENTS
+    // =============================================
+    const $ = (id) => document.getElementById(id);
+
+    const statusDot = $('statusDot');
+    const statusText = $('statusText');
+    const welcomeSection = $('welcomeSection');
+    const conversationSection = $('conversationSection');
+    const pausedSection = $('pausedSection');
+    const errorBanner = $('errorBanner');
+    const errorMessage = $('errorMessage');
+    const messages = $('messages');
+    const emptyState = $('emptyState');
+    const audioLevel = $('audioLevel');
+    const startBtn = $('startBtn');
+    const pauseBtn = $('pauseBtn');
+    const resumeBtn = $('resumeBtn');
+    const clearBtn = $('clearBtn');
+    const retryBtn = $('retryBtn');
+    const toastContainer = $('toastContainer');
+
+    // =============================================
+    // STATE
+    // =============================================
+    let ws = null;
+    let audioContext = null;
+    let playbackContext = null;
+    let isRecording = false;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT = 3;
+
+    // =============================================
+    // UI HELPERS
+    // =============================================
+    function setStatus(state, text) {
+      statusDot.className = 'status-dot ' + state;
+      statusText.textContent = text;
+    }
+
+    function showSection(section) {
+      welcomeSection.classList.add('hidden');
+      conversationSection.classList.add('hidden');
+      pausedSection.classList.add('hidden');
+      errorBanner.classList.add('hidden');
+      section.classList.remove('hidden');
+    }
+
+    function showError(message) {
+      errorMessage.textContent = message;
+      errorBanner.classList.remove('hidden');
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.innerHTML = `
+        <span class="toast-icon">${type === 'success' ? '✓' : 'ℹ️'}</span>
+        <span>${message}</span>
+      `;
+      toastContainer.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 250);
+      }, 3000);
+    }
+
+    function addMessage(type, text) {
+      emptyState.classList.add('hidden');
+
+      const msg = document.createElement('div');
+
+      if (type === 'tool') {
+        msg.className = 'message message-tool';
+        msg.innerHTML = `<span>✓</span><span>${text}</span>`;
+      } else {
+        msg.className = 'message message-assistant';
+        msg.innerHTML = `
+          <div class="message-label">Sam</div>
+          <div class="message-content">${text}</div>
+        `;
+      }
+
+      messages.appendChild(msg);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    // =============================================
+    // WEBSOCKET
+    // =============================================
+    function connect() {
+      setStatus('connecting', 'Connecting...');
+      errorBanner.classList.add('hidden');
+
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}/ws/audio`);
+
+      ws.onopen = () => {
+        setStatus('ready', 'Ready');
+        startBtn.disabled = false;
+        reconnectAttempts = 0;
+      };
+
+      ws.onclose = () => {
+        setStatus('', 'Disconnected');
+        startBtn.disabled = true;
+        stopRecording();
+
+        if (reconnectAttempts < MAX_RECONNECT) {
+          reconnectAttempts++;
+          setTimeout(connect, 2000);
+        } else {
+          showError('Unable to connect. Please check your connection.');
+        }
+      };
+
+      ws.onerror = () => {
+        setStatus('error', 'Error');
+      };
+
+      ws.onmessage = async (event) => {
+        if (event.data instanceof Blob) {
+          const arrayBuffer = await event.data.arrayBuffer();
+          playAudio(arrayBuffer);
+        } else {
+          try {
+            const data = JSON.parse(event.data);
+            handleMessage(data);
+          } catch (e) {
+            console.error('Failed to parse message:', e);
+          }
+        }
+      };
+    }
+
+    function handleMessage(data) {
+      switch (data.type) {
+        case 'text':
+          addMessage('assistant', data.payload);
+          break;
+        case 'status':
+          if (data.payload === 'ready') {
+            setStatus('listening', 'Listening...');
+          }
+          break;
+        case 'error':
+          showToast(data.payload, 'error');
+          break;
+        case 'tool':
+          addMessage('tool', data.payload);
+          showToast(data.payload);
+          break;
+      }
+    }
+
+    // =============================================
+    // AUDIO RECORDING
+    // =============================================
+    async function startRecording() {
+      try {
+        // Check requirements
+        if (!window.isSecureContext) {
+          showError('Microphone requires HTTPS. Use localhost or https://');
+          return;
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+          showError('Your browser doesn\'t support microphone access.');
+          return;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        });
+
+        audioContext = new AudioContext({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        // Audio level visualization
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        function updateLevel() {
+          if (!isRecording) return;
+          analyser.getByteFrequencyData(dataArray);
+          const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          audioLevel.style.width = Math.min(100, avg * 2.5) + '%';
+          requestAnimationFrame(updateLevel);
+        }
+
+        // Audio processing
+        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+
+        processor.onaudioprocess = (e) => {
+          if (!isRecording || ws?.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          const int16 = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, input[i] * 32768));
+          }
+          ws.send(int16.buffer);
+        };
+
+        isRecording = true;
+        setStatus('listening', 'Listening...');
+        updateLevel();
+
+        // Update UI
+        showSection(conversationSection);
+        ws.send(JSON.stringify({ action: 'start' }));
+
+      } catch (err) {
+        console.error('Microphone error:', err);
+        if (err.name === 'NotAllowedError') {
+          showError('Microphone access denied. Please allow access and try again.');
+        } else {
+          showError('Could not access microphone: ' + err.message);
+        }
+      }
+    }
+
+    function stopRecording() {
+      isRecording = false;
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      resetPlayback();
+      audioLevel.style.width = '0%';
+
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'stop' }));
+      }
+    }
+
+    function pauseSession() {
+      stopRecording();
+      setStatus('', 'Paused');
+      showSection(pausedSection);
+    }
+
+    function resumeSession() {
+      startRecording();
+    }
+
+    // =============================================
+    // AUDIO PLAYBACK
+    // =============================================
+    let scheduledTime = 0;
+    let isFirstChunk = true;
+
+    async function playAudio(arrayBuffer) {
+      if (!playbackContext) {
+        playbackContext = new AudioContext({ sampleRate: 24000 });
+        scheduledTime = playbackContext.currentTime;
+        isFirstChunk = true;
+      }
+
+      const int16 = new Int16Array(arrayBuffer);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768;
+      }
+
+      const buffer = playbackContext.createBuffer(1, float32.length, 24000);
+      buffer.getChannelData(0).set(float32);
+
+      const source = playbackContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(playbackContext.destination);
+
+      const now = playbackContext.currentTime;
+      if (isFirstChunk || scheduledTime < now) {
+        scheduledTime = now + 0.05;
+        isFirstChunk = false;
+      }
+
+      source.start(scheduledTime);
+      scheduledTime += buffer.duration;
+    }
+
+    function resetPlayback() {
+      if (playbackContext) {
+        playbackContext.close();
+        playbackContext = null;
+      }
+      scheduledTime = 0;
+      isFirstChunk = true;
+    }
+
+    // =============================================
+    // EVENT LISTENERS
+    // =============================================
+    startBtn.addEventListener('click', startRecording);
+    pauseBtn.addEventListener('click', pauseSession);
+    resumeBtn.addEventListener('click', resumeSession);
+
+    retryBtn.addEventListener('click', () => {
+      reconnectAttempts = 0;
+      errorBanner.classList.add('hidden');
+      connect();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      messages.innerHTML = '';
+      messages.appendChild(emptyState);
+      emptyState.classList.remove('hidden');
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Escape to pause
+      if (e.key === 'Escape' && isRecording) {
+        pauseSession();
+      }
+      // Space to toggle (only if not in input)
+      if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+        if (isRecording) {
+          pauseSession();
+        } else if (!startBtn.disabled && !welcomeSection.classList.contains('hidden')) {
+          startRecording();
+        } else if (!pausedSection.classList.contains('hidden')) {
+          resumeSession();
+        }
+      }
+    });
+
+    // =============================================
+    // INIT
+    // =============================================
+    connect();
+
+    // Check microphone support on load
+    if (!window.isSecureContext) {
+      setStatus('error', 'HTTPS Required');
+      showError('Microphone requires a secure connection. Please use https:// or localhost.');
+    } else if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus('error', 'Not Supported');
+      showError('Your browser doesn\'t support microphone access. Please use Chrome, Firefox, or Edge.');
+    }
+  </script>
+</body>
 </html>
