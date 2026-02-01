@@ -12,6 +12,16 @@
 - **Custom Evaluation Framework** - Scorers for brevity, supportiveness, tool usage, and response quality
 - **Self-Improving Memory** - Redis-backed vector search learns from past successful interventions
 
+## 🏆 Sponsor Technologies Used
+
+| Sponsor | Technology | How We Use It |
+|---------|------------|---------------|
+| **Weights & Biases** | [Weave](https://wandb.ai/site/weave) | `@weave.op` tracing on all voice interactions, tool calls, and memory operations. Custom evaluation scorers (`brevity_scorer`, `supportiveness_scorer`, `tool_usage_scorer`, `response_quality_scorer`). Session tracking with `weave.attributes()`. `weave.Evaluation` for systematic testing. |
+| **Google** | [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) | Real-time bidirectional audio streaming for voice conversations. Native speech-to-text and text-to-speech. Tool calling for 13 ADHD/Autism support functions. |
+| **Google** | [GenAI SDK](https://github.com/google/genai-python) | `google-genai` Python SDK for Gemini API access. Embedding generation via `models.embed_content()` for semantic memory search. |
+| **Google** | [ADK](https://github.com/google/adk-python) | Agent Development Kit for multi-agent orchestration (agent definitions in `agents/`). |
+| **Redis** | [Redis Stack](https://redis.io/docs/stack/) | Vector similarity search for finding relevant past interventions. User memory storage with 30-day TTL. Session state and user profiles. |
+
 ## 🔍 Weave Integration
 
 ### Observability (`@weave.op` Tracing)
