@@ -7,10 +7,13 @@ import time
 from typing import Optional
 
 import weave
+import os
 from dotenv import load_dotenv
 
 from voice.gemini_live import GeminiLiveClient, GeminiLiveConfig
 from voice.audio import AudioCapture, AudioPlayback, VoiceActivityDetector
+from memory.redis_memory import RedisUserMemory
+from memory.reflection import generate_reflection
 
 
 class VoiceBot:
@@ -35,6 +38,17 @@ class VoiceBot:
         self._on_error_cb = on_error
         self._on_turn_complete_cb = on_turn_complete
 
+        # Initialize memory if Redis URL is available
+        self.memory = None
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            try:
+                self.memory = RedisUserMemory(user_id=user_id, redis_url=redis_url)
+                print(f"✅ Memory system initialized for user: {user_id}")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not initialize memory system: {e}")
+                print("   Continuing without memory...")
+
         # Gemini Live client
         config = GeminiLiveConfig(
             voice=voice,
@@ -44,6 +58,7 @@ class VoiceBot:
             config=config,
             session_id=session_id,
             user_id=user_id,
+            memory=self.memory,  # Pass memory to client
         )
 
         # Audio components
@@ -102,6 +117,17 @@ class VoiceBot:
             self.audio_capture.terminate()
         if self.audio_playback:
             self.audio_playback.terminate()
+
+        # Generate end-of-session reflection if memory is available
+        if self.memory:
+            try:
+                print("\n📝 Generating session reflection...")
+                transcript = self.client.get_transcript()
+                if transcript:
+                    reflection = await generate_reflection(self.memory, transcript)
+                    print(f"💡 Insight: {reflection}")
+            except Exception as e:
+                print(f"⚠️  Reflection generation failed: {e}")
 
         await self.client.disconnect()
 
