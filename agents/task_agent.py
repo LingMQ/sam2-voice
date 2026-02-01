@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from google.adk import Agent
-from google.adk.tools import tool
+from google.adk.tools import FunctionTool
 
 
 def _load_prompt(name: str) -> str:
@@ -20,7 +20,6 @@ def _load_prompt(name: str) -> str:
 _current_tasks: dict[str, dict] = {}
 
 
-@tool
 def create_microsteps(task: str, count: int = 3, session_id: str = "default") -> str:
     """Break a task into micro-steps and store them.
 
@@ -41,7 +40,6 @@ def create_microsteps(task: str, count: int = 3, session_id: str = "default") ->
     return f"Created {count} micro-steps for: {task}"
 
 
-@tool
 def get_current_step(session_id: str = "default") -> str:
     """Get the current step the user should work on.
 
@@ -64,7 +62,6 @@ def get_current_step(session_id: str = "default") -> str:
     return f"Step {step} of {total} for: {task_info['task']}"
 
 
-@tool
 def mark_step_complete(session_id: str = "default") -> str:
     """Mark the current micro-step as complete.
 
@@ -90,7 +87,6 @@ def mark_step_complete(session_id: str = "default") -> str:
     return f"Step {step} complete! {total - step} steps remaining."
 
 
-@tool
 def get_current_time() -> str:
     """Get the current time for time-awareness.
 
@@ -100,7 +96,6 @@ def get_current_time() -> str:
     return datetime.now().strftime("%I:%M %p")
 
 
-@tool
 def create_reminder(task: str, minutes: int) -> str:
     """Create a reminder for a task.
 
@@ -137,5 +132,11 @@ You: "Step 1: Pick up just 3 items from the floor. Tell me when done."
 
 Keep responses under 2 sentences.
 """,
-    tools=[create_microsteps, get_current_step, mark_step_complete, get_current_time, create_reminder],
+    tools=[
+        FunctionTool(create_microsteps),
+        FunctionTool(get_current_step),
+        FunctionTool(mark_step_complete),
+        FunctionTool(get_current_time),
+        FunctionTool(create_reminder),
+    ],
 )

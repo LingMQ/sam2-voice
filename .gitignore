@@ -39,3 +39,5 @@ frontend/out/
 .DS_Store
 .idea/
 .vscode/
+
+sessions/

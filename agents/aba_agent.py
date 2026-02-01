@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from google.adk import Agent
-from google.adk.tools import tool
+from google.adk.tools import FunctionTool
 
 
 def _load_prompt(name: str) -> str:
@@ -13,7 +13,6 @@ def _load_prompt(name: str) -> str:
     return ""
 
 
-@tool
 def record_behavior(behavior: str, antecedent: str, consequence: str) -> str:
     """Record an ABC (Antecedent-Behavior-Consequence) observation.
 
@@ -29,7 +28,6 @@ def record_behavior(behavior: str, antecedent: str, consequence: str) -> str:
     return f"Recorded: {antecedent} → {behavior} → {consequence}"
 
 
-@tool
 def suggest_reinforcement(behavior_type: str) -> str:
     """Suggest an appropriate reinforcement for a behavior type.
 
@@ -48,7 +46,6 @@ def suggest_reinforcement(behavior_type: str) -> str:
     return reinforcements.get(behavior_type, "Provide warm, specific acknowledgment")
 
 
-@tool
 def get_prompt_level(independence_level: int) -> str:
     """Get the appropriate prompt level based on user's current independence.
 
@@ -87,5 +84,9 @@ Core techniques:
 Keep all interventions voice-friendly (short, clear) and non-punitive.
 Focus on building independence respectfully.
 """,
-    tools=[record_behavior, suggest_reinforcement, get_prompt_level],
+    tools=[
+        FunctionTool(record_behavior),
+        FunctionTool(suggest_reinforcement),
+        FunctionTool(get_prompt_level),
+    ],
 )
