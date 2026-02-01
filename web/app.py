@@ -15,6 +15,8 @@ from voice.gemini_live import GeminiLiveClient, GeminiLiveConfig
 from memory.redis_memory import RedisUserMemory
 from memory.health import MemoryHealthCheck
 from memory.debug import MemoryDebugger
+from agents.feedback_loop_agent import _scheduled_checkins
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -168,8 +170,10 @@ async def ws_audio_endpoint(websocket: WebSocket):
 
     client: GeminiLiveClient | None = None
     receive_task: asyncio.Task | None = None
+    checkin_task: asyncio.Task | None = None
     is_running = False
     memory: RedisUserMemory | None = None
+    session_id = "browser"
 
     async def send_text(text: str):
         """Send text message to browser."""
@@ -238,6 +242,42 @@ async def ws_audio_endpoint(websocket: WebSocket):
                 print(f"Error in receive_responses: {e}")
                 print(f"Failed to send error to client: {send_error}")
 
+    async def checkin_monitor():
+        """Background task that monitors scheduled check-ins and triggers them when time expires."""
+        nonlocal is_running, client, session_id
+        try:
+            while is_running:
+                # Check for expired check-ins every 5 seconds
+                await asyncio.sleep(5.0)
+                
+                if not is_running or not client or not client.is_connected:
+                    continue
+                
+                # Check if there's a scheduled check-in for this session
+                if session_id in _scheduled_checkins:
+                    checkin_time = _scheduled_checkins[session_id]
+                    now = datetime.now()
+                    
+                    # If check-in time has passed, trigger it
+                    if now >= checkin_time:
+                        # Remove from schedule to prevent duplicate triggers
+                        del _scheduled_checkins[session_id]
+                        
+                        # Send a check-in message to the user
+                        checkin_message = "Check-in: How are you doing? Still on track?"
+                        print(f"🔔 Triggering scheduled check-in...")
+                        await client.send_text(checkin_message)
+                        await send_text(f"[Check-in triggered]")
+                
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"Check-in monitor error: {e}")
+            try:
+                await send_text(f"[Check-in monitor error: {str(e)[:100]}]")
+            except:
+                pass
+
     try:
         while True:
             message = await websocket.receive()
@@ -295,7 +335,9 @@ async def ws_audio_endpoint(websocket: WebSocket):
 
                         if await client.connect():
                             is_running = True
+                            session_id = "browser"  # Use consistent session ID
                             receive_task = asyncio.create_task(receive_responses())
+                            checkin_task = asyncio.create_task(checkin_monitor())
                             await send_status("ready")
                         else:
                             await websocket.send_text(json.dumps({
@@ -311,6 +353,12 @@ async def ws_audio_endpoint(websocket: WebSocket):
                         receive_task.cancel()
                         try:
                             await receive_task
+                        except asyncio.CancelledError:
+                            pass
+                    if checkin_task:
+                        checkin_task.cancel()
+                        try:
+                            await checkin_task
                         except asyncio.CancelledError:
                             pass
                     
@@ -338,6 +386,12 @@ async def ws_audio_endpoint(websocket: WebSocket):
             receive_task.cancel()
             try:
                 await receive_task
+            except asyncio.CancelledError:
+                pass
+        if checkin_task:
+            checkin_task.cancel()
+            try:
+                await checkin_task
             except asyncio.CancelledError:
                 pass
         if client:

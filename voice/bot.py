@@ -15,6 +15,8 @@ from voice.audio import AudioCapture, AudioPlayback, VoiceActivityDetector
 from memory.redis_memory import RedisUserMemory
 from memory.reflection import generate_reflection
 from observability.session_tracker import SessionTracker
+from agents.feedback_loop_agent import _scheduled_checkins
+from datetime import datetime
 
 
 class VoiceBot:
@@ -182,6 +184,9 @@ class VoiceBot:
 
         # Start receive task
         receive_task = asyncio.create_task(self._receive_loop())
+        
+        # Start check-in monitoring task
+        checkin_task = asyncio.create_task(self._checkin_monitor_loop())
 
         # Main audio capture loop
         try:
@@ -208,8 +213,13 @@ class VoiceBot:
             pass
         finally:
             receive_task.cancel()
+            checkin_task.cancel()
             try:
                 await receive_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await checkin_task
             except asyncio.CancelledError:
                 pass
             await self.stop()
@@ -232,6 +242,46 @@ class VoiceBot:
             print(f"Receive error: {e}")
             if self._on_error_cb:
                 self._on_error_cb(str(e))
+
+    async def _checkin_monitor_loop(self):
+        """Background task that monitors scheduled check-ins and triggers them when time expires."""
+        try:
+            while self._is_running:
+                # Check for expired check-ins every 5 seconds
+                await asyncio.sleep(5.0)
+                
+                if not self._is_running or not self.client.is_connected:
+                    continue
+                
+                # Check if there's a scheduled check-in for this session
+                if self.session_id in _scheduled_checkins:
+                    checkin_time = _scheduled_checkins[self.session_id]
+                    now = datetime.now()
+                    
+                    # If check-in time has passed, trigger it
+                    if now >= checkin_time:
+                        # Remove from schedule to prevent duplicate triggers
+                        del _scheduled_checkins[self.session_id]
+                        
+                        # Only trigger if model is not currently speaking
+                        if not self._is_model_speaking:
+                            # Send a check-in message to the user
+                            # The model will respond naturally based on the context
+                            checkin_message = "Check-in: How are you doing? Still on track?"
+                            print(f"🔔 Triggering scheduled check-in...")
+                            await self.client.send_text(checkin_message)
+                        else:
+                            # If model is speaking, reschedule for 10 seconds later
+                            from datetime import timedelta
+                            _scheduled_checkins[self.session_id] = now + timedelta(seconds=10)
+                            print(f"⏳ Check-in time passed but model is speaking, rescheduling for 10 seconds...")
+                
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"Check-in monitor error: {e}")
+            if self._on_error_cb:
+                self._on_error_cb(f"Check-in monitor error: {str(e)}")
 
 
 @weave.op
