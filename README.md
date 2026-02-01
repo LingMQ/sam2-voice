@@ -266,8 +266,7 @@ python -m eval.run_eval
 
 ## 📊 View Results in Weave
 
-After running the application or evaluation, view traces and metrics at:
-- **Weave Dashboard**: https://wandb.ai/your-project/weave
+After running the application or evaluation, view traces and metrics at: [**Weave Dashboard**](https://wandb.ai/vaibhavyashdixit-massachusetts-institute-of-technology/sam2-voice/weave/traces)
 
 ---
 
