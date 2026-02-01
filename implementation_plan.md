@@ -21,6 +21,70 @@ This plan outlines the implementation of a **self-improving** voice-based feedba
 
 ---
 
+## Implementation Status
+
+### ✅ COMPLETED
+
+| Phase | Component | Status |
+|-------|-----------|--------|
+| 1-3 | Voice + ADK Integration | ✅ Done |
+| 1-3 | Gemini Live API client (`voice/gemini_live.py`) | ✅ Done |
+| 1-3 | AgentToolBridge (`voice/agent_bridge.py`) | ✅ Done |
+| 1-3 | 13 ADK tools exposed to Gemini Live | ✅ Done |
+| 1-3 | Rich system prompts loaded from `config/prompts/` | ✅ Done |
+| 1-3 | Browser audio frontend (`web/static/browser_audio.html`) | ✅ Done |
+| 1-3 | WebSocket audio streaming (`web/app.py`) | ✅ Done |
+| 4 | W&B Weave tracing (optional init) | ✅ Done |
+
+### 🔲 IN PROGRESS / NEXT
+
+| Phase | Component | Status |
+|-------|-----------|--------|
+| 4 | Custom Weave scorers | 🔲 TODO |
+| 6 | Redis memory with vector search | 🔲 **NEXT** |
+| 6 | Gemini embeddings integration | 🔲 TODO |
+| 6 | End-of-session reflection | 🔲 TODO |
+| 6 | Self-improvement loop | 🔲 TODO |
+
+### Architecture Achieved
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Browser                                  │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
+│  │  Microphone │───▶│  WebSocket  │───▶│  Audio Playback     │  │
+│  │  (MediaAPI) │    │  /ws/audio  │◀───│  (Web Audio API)    │  │
+│  └─────────────┘    └──────┬──────┘    └─────────────────────┘  │
+└────────────────────────────┼────────────────────────────────────┘
+                             │ Audio bytes
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Python Backend (FastAPI)                      │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    GeminiLiveClient                         ││
+│  │  ┌─────────────────┐    ┌────────────────────────────────┐  ││
+│  │  │ System Prompt   │    │      AgentToolBridge           │  ││
+│  │  │ (main_agent.txt)│    │  ┌──────────────────────────┐  │  ││
+│  │  │ Loaded from     │    │  │ 13 ADK Tools:            │  │  ││
+│  │  │ config/prompts/ │    │  │ • create_microsteps      │  │  ││
+│  │  └─────────────────┘    │  │ • mark_step_complete     │  │  ││
+│  │                         │  │ • start_breathing_exercise│ │  ││
+│  │                         │  │ • reframe_thought        │  │  ││
+│  │                         │  │ • ... (9 more)           │  │  ││
+│  │                         │  └──────────────────────────┘  │  ││
+│  │                         └────────────────────────────────┘  ││
+│  └─────────────────────────────────────────────────────────────┘│
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Gemini Live API                               │
+│              (Real-time audio streaming)                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Phase 1: Foundation Setup
 
 ### 1.1 Project Structure
@@ -1015,43 +1079,46 @@ async def get_personalized_context(
 
 Given WeaveHacks 3 is Jan 31 - Feb 1 (24 hours), here's a compressed timeline:
 
-### Hour 0-3: Foundation
-- [ ] Set up project structure with `uv`
-- [ ] Configure API keys (.env): GOOGLE_API_KEY, REDIS_URL, WANDB_API_KEY
-- [ ] Set up Redis Cloud instance (use $500 credit)
-- [ ] Test basic Gemini API connection
+### Hour 0-3: Foundation ✅ COMPLETE
+- [x] Set up project structure with `uv`
+- [x] Configure API keys (.env): GOOGLE_API_KEY, REDIS_URL, WANDB_API_KEY
+- [ ] Set up Redis Cloud instance (use $500 credit) ← **DO THIS NEXT**
+- [x] Test basic Gemini API connection
 
-### Hour 3-6: Voice with Gemini Live API
-- [ ] Implement GeminiVoiceSession class
-- [ ] Test voice input/output with Gemini Live API
-- [ ] Add Weave tracing to voice calls
-- [ ] Test: speak → Gemini responds → hear response
+### Hour 3-6: Voice with Gemini Live API ✅ COMPLETE
+- [x] Implement GeminiLiveClient class (`voice/gemini_live.py`)
+- [x] Test voice input/output with Gemini Live API
+- [x] Add Weave tracing to voice calls (optional init)
+- [x] Test: speak → Gemini responds → hear response
+- [x] Create browser audio frontend (`web/static/browser_audio.html`)
+- [x] Implement WebSocket audio streaming (`web/app.py`)
 
-### Hour 6-10: Redis Memory System
-- [ ] Implement RedisUserMemory with vector search
-- [ ] Implement embeddings with Gemini text-embedding-004
+### Hour 6-10: Redis Memory System 🔲 NEXT PRIORITY
+- [ ] Set up Redis Cloud with vector search enabled
+- [ ] Implement RedisUserMemory with vector search (`memory/redis_memory.py`)
+- [ ] Implement embeddings with Gemini text-embedding-004 (`memory/embeddings.py`)
 - [ ] Test storing and retrieving interventions
 - [ ] Test vector similarity search
 
-### Hour 10-14: Self-Improvement Integration ⭐
+### Hour 10-14: Self-Improvement Integration ⭐ 🔲 TODO
 - [ ] Connect memory to voice session (personalized prompts)
-- [ ] Implement outcome tracking
-- [ ] Implement end-of-session reflection
+- [ ] Implement outcome tracking (success/failure of interventions)
+- [ ] Implement end-of-session reflection (`memory/reflection.py`)
 - [ ] Test: simulate 2-3 sessions, verify memory improves responses
 
-### Hour 14-18: Weave Observability + Polish
-- [ ] Add comprehensive Weave tracing
-- [ ] Implement improvement scorers
+### Hour 14-18: Weave Observability + Polish 🔲 TODO
+- [x] Add basic Weave tracing
+- [ ] Implement custom improvement scorers (`observability/scorers.py`)
 - [ ] Create Weave dashboard views
 - [ ] Test full flow end-to-end
 
-### Hour 18-22: Demo Prep
+### Hour 18-22: Demo Prep 🔲 TODO
 - [ ] Create compelling demo script
 - [ ] Record demo video (for social media prize)
 - [ ] Prepare Weave dashboard screenshots showing improvement
-- [ ] Write README with architecture diagram
+- [x] Write README with architecture diagram
 
-### Hour 22-24: Submission
+### Hour 22-24: Submission 🔲 TODO
 - [ ] Final testing
 - [ ] Clean up code
 - [ ] Submit to Devpost/GitHub
@@ -1117,11 +1184,39 @@ redis-cli -u $REDIS_URL ping
 
 ## Next Steps
 
-1. **Set up Redis:** Create Redis Cloud instance with $500 credit
-2. **Test Gemini Live:** Get basic voice working with Gemini
-3. **Implement memory:** Build RedisUserMemory with vector search
-4. **Connect everything:** Voice → Memory → Personalized responses
-5. **Add Weave:** Trace everything, build improvement dashboard
+### Immediate Priority: Redis Memory System
+
+1. **Set up Redis Cloud:** Create Redis Cloud instance with $500 credit
+   - Enable Redis Stack (for vector search)
+   - Get connection URL for `.env`
+
+2. **Create memory module:**
+   ```bash
+   mkdir -p memory
+   touch memory/__init__.py
+   touch memory/redis_memory.py
+   touch memory/embeddings.py
+   touch memory/reflection.py
+   ```
+
+3. **Implement `memory/embeddings.py`:** Gemini text-embedding-004 for vector embeddings
+
+4. **Implement `memory/redis_memory.py`:**
+   - `RedisUserMemory` class with vector search
+   - Store/retrieve interventions with embeddings
+   - TTL-based memory decay (30 days)
+
+5. **Integrate with voice session:**
+   - Load personalized context in `GeminiLiveClient._build_system_instruction()`
+   - Record intervention outcomes after tool calls
+   - Generate end-of-session reflections
+
+### After Redis: Self-Improvement Loop
+
+1. **Outcome tracking:** Track which interventions led to task completion
+2. **Dynamic few-shot:** Use vector search to find similar successful interventions
+3. **End-of-session reflection:** Generate insights and store in Redis
+4. **Weave integration:** Feed traces into Redis memory for continuous improvement
 
 ---
 
